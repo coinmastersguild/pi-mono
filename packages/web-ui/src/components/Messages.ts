@@ -5,7 +5,7 @@ import type {
 	ToolCall,
 	ToolResultMessage as ToolResultMessageType,
 	UserMessage as UserMessageType,
-} from "@mariozechner/pi-ai";
+} from "@pioneer-platform/pi-ai";
 import { html, LitElement, type TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { renderTool } from "../tools/index.js";
@@ -297,7 +297,7 @@ export class AbortedMessage extends LitElement {
 // ============================================================================
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { Message } from "@mariozechner/pi-ai";
+import type { Message } from "@pioneer-platform/pi-ai";
 
 /**
  * Convert attachments to content blocks for LLM.

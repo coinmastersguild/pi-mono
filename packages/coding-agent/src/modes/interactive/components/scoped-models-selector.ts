@@ -1,4 +1,3 @@
-import type { Model } from "@mariozechner/pi-ai";
 import {
 	Container,
 	type Focusable,
@@ -10,6 +9,7 @@ import {
 	Spacer,
 	Text,
 } from "@mariozechner/pi-tui";
+import type { Model } from "@pioneer-platform/pi-ai";
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 

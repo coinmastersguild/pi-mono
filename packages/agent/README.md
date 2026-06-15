@@ -1,6 +1,6 @@
 # @mariozechner/pi-agent-core
 
-Stateful agent with tool execution and event streaming. Built on `@mariozechner/pi-ai`.
+Stateful agent with tool execution and event streaming. Built on `@pioneer-platform/pi-ai`.
 
 ## Installation
 
@@ -12,7 +12,7 @@ npm install @mariozechner/pi-agent-core
 
 ```typescript
 import { Agent } from "@mariozechner/pi-agent-core";
-import { getModel } from "@mariozechner/pi-ai";
+import { getModel } from "@pioneer-platform/pi-ai";
 
 const agent = new Agent({
   initialState: {

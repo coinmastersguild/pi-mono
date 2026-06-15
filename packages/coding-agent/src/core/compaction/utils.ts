@@ -3,7 +3,7 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { Message } from "@mariozechner/pi-ai";
+import type { Message } from "@pioneer-platform/pi-ai";
 
 // ============================================================================
 // File Operation Tracking

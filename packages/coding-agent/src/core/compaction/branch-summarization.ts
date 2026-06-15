@@ -6,8 +6,8 @@
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { Model } from "@mariozechner/pi-ai";
-import { completeSimple } from "@mariozechner/pi-ai";
+import type { Model } from "@pioneer-platform/pi-ai";
+import { completeSimple } from "@pioneer-platform/pi-ai";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,

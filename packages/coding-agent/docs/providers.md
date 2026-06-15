@@ -20,6 +20,7 @@ Use `/login` in interactive mode, then select a provider:
 - GitHub Copilot
 - Google Gemini CLI
 - Google Antigravity
+- Pioneer (alpha.pioneers.dev) — opens the keys page and prompts for a pasted `sk-pioneer-...` key
 
 Use `/logout` to clear credentials. Tokens are stored in `~/.pi/agent/auth.json` and auto-refresh when expired.
 
@@ -66,6 +67,7 @@ pi
 | ZAI | `ZAI_API_KEY` | `zai` |
 | OpenCode Zen | `OPENCODE_API_KEY` | `opencode` |
 | OpenCode Go | `OPENCODE_API_KEY` | `opencode-go` |
+| Pioneer | `PIONEER_API_KEY` | `pioneer` |
 | Hugging Face | `HF_TOKEN` | `huggingface` |
 | Kimi For Coding | `KIMI_API_KEY` | `kimi-coding` |
 | MiniMax | `MINIMAX_API_KEY` | `minimax` |

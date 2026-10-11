@@ -1,8 +1,5 @@
-// Core Agent
-export * from "./agent.js";
-// Loop functions
-export * from "./agent-loop.js";
-// Proxy utilities
-export * from "./proxy.js";
-// Types
-export * from "./types.js";
+export * from "./agent.ts";
+export * from "./agent-loop.ts";
+export * from "./proxy.ts";
+export { setDefaultStreamFn } from "./stream-fn.ts";
+export * from "./types.ts";

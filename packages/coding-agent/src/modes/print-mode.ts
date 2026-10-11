@@ -6,10 +6,11 @@
  * - `pi --mode json "prompt"` - JSON event stream
  */
 
-import type { AssistantMessage, ImageContent } from "@pioneer-platform/pi-ai";
-import type { AgentSessionRuntime } from "../core/agent-session-runtime.js";
-import { flushRawStdout, writeRawStdout } from "../core/output-guard.js";
-import { killTrackedDetachedChildren } from "../utils/shell.js";
+import type { AssistantMessage, ImageContent } from "@earendil-works/pi-ai";
+import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
+import { flushRawStdout, waitForRawStdoutBackpressure, writeRawStdout } from "../core/output-guard.ts";
+import { killTrackedDetachedChildren } from "../utils/shell.ts";
+import { toJsonEvent } from "./json-event.ts";
 
 /**
  * Options for print mode.
@@ -34,6 +35,7 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 	let exitCode = 0;
 	let session = runtimeHost.session;
 	let unsubscribe: (() => void) | undefined;
+	let unsubscribeBackpressure: (() => void) | undefined;
 	let disposed = false;
 	const signalCleanupHandlers: Array<() => void> = [];
 
@@ -41,6 +43,7 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 		if (disposed) return;
 		disposed = true;
 		unsubscribe?.();
+		unsubscribeBackpressure?.();
 		await runtimeHost.dispose();
 	};
 
@@ -64,23 +67,19 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 
 	registerSignalHandlers();
 
+	runtimeHost.setRebindSession(async () => {
+		await rebindSession();
+	});
+
 	const rebindSession = async (): Promise<void> => {
 		session = runtimeHost.session;
 		await session.bindExtensions({
+			mode: mode === "json" ? "json" : "print",
 			commandContextActions: {
-				waitForIdle: () => session.agent.waitForIdle(),
-				newSession: async (newSessionOptions) => {
-					const result = await runtimeHost.newSession(newSessionOptions);
-					if (!result.cancelled) {
-						await rebindSession();
-					}
-					return result;
-				},
-				fork: async (entryId) => {
-					const result = await runtimeHost.fork(entryId);
-					if (!result.cancelled) {
-						await rebindSession();
-					}
+				waitForIdle: () => session.waitForIdle(),
+				newSession: async (newSessionOptions) => runtimeHost.newSession(newSessionOptions),
+				fork: async (entryId, forkOptions) => {
+					const result = await runtimeHost.fork(entryId, forkOptions);
 					return { cancelled: result.cancelled };
 				},
 				navigateTree: async (targetId, navigateOptions) => {
@@ -92,12 +91,8 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 					});
 					return { cancelled: result.cancelled };
 				},
-				switchSession: async (sessionPath) => {
-					const result = await runtimeHost.switchSession(sessionPath);
-					if (!result.cancelled) {
-						await rebindSession();
-					}
-					return result;
+				switchSession: async (sessionPath, switchOptions) => {
+					return runtimeHost.switchSession(sessionPath, switchOptions);
 				},
 				reload: async () => {
 					await session.reload();
@@ -109,11 +104,18 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 		});
 
 		unsubscribe?.();
+		unsubscribeBackpressure?.();
 		unsubscribe = session.subscribe((event) => {
 			if (mode === "json") {
-				writeRawStdout(`${JSON.stringify(event)}\n`);
+				writeRawStdout(`${JSON.stringify(toJsonEvent(event))}\n`);
 			}
 		});
+		unsubscribeBackpressure =
+			mode === "json"
+				? session.agent.subscribe(async () => {
+						await waitForRawStdoutBackpressure();
+					})
+				: undefined;
 	};
 
 	try {

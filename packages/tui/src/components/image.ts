@@ -1,11 +1,44 @@
 import {
+	allocateImageId,
 	getCapabilities,
+	getCellDimensions,
 	getImageDimensions,
+	getPngDimensions,
 	type ImageDimensions,
 	imageFallback,
 	renderImage,
-} from "../terminal-image.js";
-import type { Component } from "../tui.js";
+} from "../terminal-image.ts";
+import type { Component } from "../tui.ts";
+import { truncateToWidth } from "../utils.ts";
+
+/**
+ * Converts base64 image data to base64 PNG data, or returns null if it cannot.
+ * Called synchronously during rendering.
+ */
+export type ImageTranscoder = (base64Data: string, mimeType: string) => string | null;
+
+let imageTranscoder: ImageTranscoder | undefined;
+// Backstop for callers that recreate Image instances. Keyed by source data, least recently used first.
+const pngCache = new Map<string, string | null>();
+
+/**
+ * Register the converter used for non-PNG images on Kitty-protocol terminals, which only accept PNG.
+ * Without one, such images render as text fallbacks.
+ */
+export function setImageTranscoder(transcoder: ImageTranscoder | undefined): void {
+	imageTranscoder = transcoder;
+	pngCache.clear();
+}
+
+function toPng(base64Data: string, mimeType: string): string | null {
+	if (!imageTranscoder) return null;
+	const cached = pngCache.get(base64Data);
+	const png = cached === undefined ? imageTranscoder(base64Data, mimeType) : cached;
+	pngCache.delete(base64Data);
+	pngCache.set(base64Data, png);
+	if (pngCache.size > 32) pngCache.delete(pngCache.keys().next().value!);
+	return png;
+}
 
 export interface ImageTheme {
 	fallbackColor: (str: string) => string;
@@ -26,6 +59,8 @@ export class Image implements Component {
 	private theme: ImageTheme;
 	private options: ImageOptions;
 	private imageId?: number;
+	/** Converted PNG data for Kitty. Failures are not stored so a later transcoder can retry. */
+	private pngData?: string;
 
 	private cachedLines?: string[];
 	private cachedWidth?: number;
@@ -60,15 +95,31 @@ export class Image implements Component {
 			return this.cachedLines;
 		}
 
-		const maxWidth = Math.min(width - 2, this.options.maxWidthCells ?? 60);
+		const maxWidth = Math.max(1, Math.min(width - 2, this.options.maxWidthCells ?? 60));
+		const cellDimensions = getCellDimensions();
+		const defaultMaxHeight = Math.max(1, Math.ceil((maxWidth * cellDimensions.widthPx) / cellDimensions.heightPx));
+		const maxHeight = this.options.maxHeightCells ?? defaultMaxHeight;
 
 		const caps = getCapabilities();
+		let data: string | null = this.base64Data;
+		let dimensions = this.dimensions;
+		if (caps.images === "kitty" && this.mimeType !== "image/png") {
+			this.pngData ??= toPng(this.base64Data, this.mimeType) ?? undefined;
+			data = this.pngData ?? null;
+			// Conversion may apply EXIF rotation, so prefer the PNG's own dimensions.
+			if (data) dimensions = getPngDimensions(data) ?? dimensions;
+		}
 		let lines: string[];
 
-		if (caps.images) {
-			const result = renderImage(this.base64Data, this.dimensions, {
+		if (caps.images && data) {
+			if (caps.images === "kitty" && this.imageId === undefined) {
+				this.imageId = allocateImageId();
+			}
+			const result = renderImage(data, dimensions, {
 				maxWidthCells: maxWidth,
+				maxHeightCells: maxHeight,
 				imageId: this.imageId,
+				moveCursor: false,
 			});
 
 			if (result) {
@@ -77,23 +128,35 @@ export class Image implements Component {
 					this.imageId = result.imageId;
 				}
 
-				// Return `rows` lines so TUI accounts for image height
-				// First (rows-1) lines are empty (TUI clears them)
-				// Last line: move cursor back up, then output image sequence
-				lines = [];
-				for (let i = 0; i < result.rows - 1; i++) {
-					lines.push("");
+				if (caps.images === "kitty") {
+					// For Kitty: C=1 prevents cursor movement.
+					// Don't need the cursor movement.
+					lines = [result.sequence];
+
+					// Return `rows` lines so TUI accounts for image height.
+					for (let i = 0; i < result.rows - 1; i++) {
+						lines.push("");
+					}
+				} else {
+					// Return `rows` lines so TUI accounts for image height.
+					// First (rows-1) lines are empty and cleared before the image is drawn.
+					// Last line: move cursor back up, draw the image, then move back down
+					// so TUI cursor accounting stays inside the scroll area.
+					lines = [];
+					for (let i = 0; i < result.rows - 1; i++) {
+						lines.push("");
+					}
+					const rowOffset = result.rows - 1;
+					const moveUp = rowOffset > 0 ? `\x1b[${rowOffset}A` : "";
+					lines.push(moveUp + result.sequence);
 				}
-				// Move cursor up to first row, then output image
-				const moveUp = result.rows > 1 ? `\x1b[${result.rows - 1}A` : "";
-				lines.push(moveUp + result.sequence);
 			} else {
 				const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-				lines = [this.theme.fallbackColor(fallback)];
+				lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
 			}
 		} else {
 			const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-			lines = [this.theme.fallbackColor(fallback)];
+			lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
 		}
 
 		this.cachedLines = lines;

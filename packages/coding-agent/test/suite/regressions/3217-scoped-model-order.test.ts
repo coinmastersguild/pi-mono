@@ -1,10 +1,11 @@
-import type { TUI } from "@mariozechner/pi-tui";
-import stripAnsi from "strip-ansi";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.js";
-import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.js";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.js";
-import { createHarness, type Harness } from "../harness.js";
+import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { KeybindingsManager } from "../../../src/core/keybindings.ts";
+import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
+import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
+import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
+import { stripAnsi } from "../../../src/utils/ansi.ts";
+import { createHarness, type Harness } from "../harness.ts";
 
 function createFakeTui(): TUI {
 	return {
@@ -12,15 +13,16 @@ function createFakeTui(): TUI {
 	} as unknown as TUI;
 }
 
-async function waitForAsyncRender(): Promise<void> {
-	await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 describe("issue #3217 scoped model ordering", () => {
 	const harnesses: Harness[] = [];
 
 	beforeAll(() => {
 		initTheme("dark");
+	});
+
+	beforeEach(() => {
+		// Ensure test isolation: keybindings are a global singleton
+		setKeybindings(new KeybindingsManager());
 	});
 
 	afterEach(() => {
@@ -76,21 +78,24 @@ describe("issue #3217 scoped model ordering", () => {
 		const selector = new ModelSelectorComponent(
 			createFakeTui(),
 			modelOne,
-			harness.settingsManager,
-			harness.session.modelRegistry,
+			harness.session.modelRuntime,
 			[{ model: modelTwo }, { model: modelOne }, { model: modelThree }],
 			() => {},
 			() => {},
 		);
 
-		await waitForAsyncRender();
+		await vi.waitFor(() => {
+			const rendered = stripAnsi(selector.render(120).join("\n"));
+			expect(rendered).toContain(`[${modelOne.provider}]`);
+			expect(rendered).toContain("Model catalogs refreshed.");
+		});
 
 		const renderedLines = stripAnsi(selector.render(120).join("\n"))
 			.split("\n")
 			.filter((line) => line.includes(`[${modelOne.provider}]`));
 		const orderedIds = renderedLines.slice(0, 3).map((line) => {
 			const [modelId] = line.trim().replace(/^→\s*/, "").split(" [");
-			return modelId?.trim() ?? "";
+			return modelId?.replace(/^✓\s*/, "").trim() ?? "";
 		});
 
 		expect(orderedIds).toEqual([modelTwo.id, modelOne.id, modelThree.id]);

@@ -1,7 +1,17 @@
 // Core session management
 
+export { type Args, parseArgs } from "./cli/args.ts";
+
 // Config paths
-export { getAgentDir, VERSION } from "./config.js";
+export {
+	CONFIG_DIR_NAME,
+	getAgentDir,
+	getDocsPath,
+	getExamplesPath,
+	getPackageDir,
+	getReadmePath,
+	VERSION,
+} from "./config.ts";
 export {
 	AgentSession,
 	type AgentSessionConfig,
@@ -12,17 +22,9 @@ export {
 	type PromptOptions,
 	parseSkillBlock,
 	type SessionStats,
-} from "./core/agent-session.js";
-// Auth and model registry
-export {
-	type ApiKeyCredential,
-	type AuthCredential,
-	AuthStorage,
-	type AuthStorageBackend,
-	FileAuthStorageBackend,
-	InMemoryAuthStorageBackend,
-	type OAuthCredential,
-} from "./core/auth-storage.js";
+} from "./core/agent-session.ts";
+export { readStoredCredential } from "./core/auth-storage.ts";
+export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
 // Compaction
 export {
 	type BranchPreparation,
@@ -41,30 +43,54 @@ export {
 	type GenerateBranchSummaryOptions,
 	generateBranchSummary,
 	generateSummary,
+	generateSummaryWithUsage,
 	getLastAssistantUsage,
 	prepareBranchEntries,
 	serializeConversation,
 	shouldCompact,
-} from "./core/compaction/index.js";
-export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.js";
+} from "./core/compaction/index.ts";
+export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
 // Extension system
 export type {
+	AfterProviderResponseEvent,
+	AgentActivityOutcome,
+	AgentBeforeSettleEvent,
+	AgentBeforeSettleEventResult,
 	AgentEndEvent,
+	AgentSettledEvent,
 	AgentStartEvent,
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	AppKeybinding,
+	AutocompleteProviderFactory,
 	BashToolCallEvent,
 	BeforeAgentStartEvent,
+	BeforeAgentStartEventResult,
+	BeforeProviderHeadersEvent,
 	BeforeProviderRequestEvent,
 	BeforeProviderRequestEventResult,
+	BoundaryContextPreview,
+	BoundaryResult,
+	BoundaryState,
+	BuildSystemPromptOptions,
+	CacheWarmingDecisionEvent,
+	CacheWarmingDecisionEventResult,
+	CompactionEntryDraft,
 	CompactOptions,
+	ContextEditEntryDraft,
 	ContextEvent,
+	ContextEventResult,
 	ContextUsage,
+	ContextWithSystemEvent,
+	CustomEntryDraft,
+	CustomMessageEntryDraft,
 	CustomToolCallEvent,
 	EditToolCallEvent,
+	EntryRenderer,
+	EntryRenderOptions,
 	ExecOptions,
 	ExecResult,
+	ExecuteToolOptions,
 	Extension,
 	ExtensionActions,
 	ExtensionAPI,
@@ -79,30 +105,59 @@ export type {
 	ExtensionHandler,
 	ExtensionRuntime,
 	ExtensionShortcut,
+	ExtensionToolContext,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
+	ExtensionVirtualModel,
 	ExtensionWidgetOptions,
 	FindToolCallEvent,
 	GrepToolCallEvent,
+	InlineExtension,
 	InputEvent,
 	InputEventResult,
 	InputSource,
 	KeybindingsManager,
 	LoadExtensionsResult,
 	LsToolCallEvent,
+	MarkdownTransformContext,
+	MarkdownTransformer,
+	McpServersChangeEvent,
+	MessageEndEvent,
+	MessageEndEventResult,
 	MessageRenderer,
 	MessageRenderOptions,
+	MessageStartEvent,
+	MessageUpdateEvent,
+	ModelSelectEvent,
+	ModelSelectSource,
+	NormalizedBuildSystemPromptOptions,
+	PowerShellToolCallEvent,
+	ProjectTrustContext,
+	ProjectTrustEvent,
+	ProjectTrustEventDecision,
+	ProjectTrustEventResult,
+	ProjectTrustHandler,
 	ProviderConfig,
 	ProviderModelConfig,
+	ProviderStreamEvent,
 	ReadToolCallEvent,
 	RegisteredCommand,
 	RegisteredTool,
 	ResolvedCommand,
+	ResourcesDiscoverEvent,
+	ResourcesDiscoverResult,
 	SessionBeforeCompactEvent,
+	SessionBeforeCompactResult,
 	SessionBeforeForkEvent,
+	SessionBeforeForkResult,
 	SessionBeforeSwitchEvent,
+	SessionBeforeSwitchResult,
 	SessionBeforeTreeEvent,
+	SessionBeforeTreeResult,
+	SessionBoundaryDraft,
 	SessionCompactEvent,
+	SessionCompactFailedEvent,
+	SessionInfoChangedEvent,
 	SessionShutdownEvent,
 	SessionStartEvent,
 	SessionTreeEvent,
@@ -110,20 +165,37 @@ export type {
 	SlashCommandSource,
 	SourceInfo,
 	TerminalInputHandler,
+	ThinkingLevelSelectEvent,
+	ToolAnnotations,
 	ToolCallEvent,
 	ToolCallEventResult,
 	ToolDefinition,
+	ToolExecutionEndEvent,
 	ToolExecutionMode,
+	ToolExecutionStartEvent,
+	ToolExecutionUpdateEvent,
+	ToolExposure,
 	ToolInfo,
+	ToolLoadout,
+	ToolLoadoutChanges,
+	ToolNamespace,
+	ToolRendererResolver,
+	ToolRenderers,
 	ToolRenderResultOptions,
 	ToolResultEvent,
+	ToolResultEventResult,
 	TurnEndEvent,
+	TurnEndEventResult,
 	TurnStartEvent,
+	UIPromptEndEvent,
+	UIPromptKind,
+	UIPromptStartEvent,
 	UserBashEvent,
 	UserBashEventResult,
 	WidgetPlacement,
+	WorkingIndicatorOptions,
 	WriteToolCallEvent,
-} from "./core/extensions/index.js";
+} from "./core/extensions/index.ts";
 export {
 	createExtensionRuntime,
 	defineTool,
@@ -134,16 +206,33 @@ export {
 	isFindToolResult,
 	isGrepToolResult,
 	isLsToolResult,
+	isPowerShellToolResult,
 	isReadToolResult,
 	isToolCallEventType,
 	isWriteToolResult,
 	wrapRegisteredTool,
 	wrapRegisteredTools,
-} from "./core/extensions/index.js";
+} from "./core/extensions/index.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
-export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.js";
-export { convertToLlm } from "./core/messages.js";
-export { ModelRegistry } from "./core/model-registry.js";
+export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
+export type { RegisteredMcpServer } from "./core/mcp-servers.ts";
+export { convertToLlm } from "./core/messages.ts";
+export { ModelRegistry } from "./core/model-registry.ts";
+export {
+	type ModelScopeDiagnostic,
+	type ResolveCliModelResult,
+	type ResolveModelScopeResult,
+	resolveCliModel,
+	resolveModelScopeWithDiagnostics,
+	type ScopedModel,
+} from "./core/model-resolver.ts";
+export {
+	type CreateModelRuntimeOptions,
+	CredentialSynchronizationError,
+	type CredentialSynchronizationOperation,
+	ModelRuntime,
+	type ModelRuntimeAuthOverrides,
+} from "./core/model-runtime.ts";
 export type {
 	PackageManager,
 	PathMetadata,
@@ -151,10 +240,10 @@ export type {
 	ProgressEvent,
 	ResolvedPaths,
 	ResolvedResource,
-} from "./core/package-manager.js";
-export { DefaultPackageManager } from "./core/package-manager.js";
-export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.js";
-export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.js";
+} from "./core/package-manager.ts";
+export { DefaultPackageManager } from "./core/package-manager.ts";
+export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
+export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
 // SDK for programmatic usage
 export {
 	AgentSessionRuntime,
@@ -178,17 +267,20 @@ export {
 	createFindTool,
 	createGrepTool,
 	createLsTool,
+	createPowerShellTool,
 	createReadOnlyTools,
 	createReadTool,
 	createWriteTool,
 	type PromptTemplate,
-	// Pre-built tools (use process.cwd())
-	readOnlyTools,
-} from "./core/sdk.js";
+} from "./core/sdk.ts";
 export {
 	type BranchSummaryEntry,
+	buildContextEntries,
 	buildSessionContext,
+	buildSessionProjection,
 	type CompactionEntry,
+	type ContextEditableContent,
+	type ContextEditEntry,
 	CURRENT_SESSION_VERSION,
 	type CustomEntry,
 	type CustomMessageEntry,
@@ -197,6 +289,7 @@ export {
 	type ModelChangeEntry,
 	migrateSessionEntries,
 	type NewSessionOptions,
+	type ProjectedSessionEntry,
 	parseSessionEntries,
 	type SessionContext,
 	type SessionEntry,
@@ -206,15 +299,25 @@ export {
 	type SessionInfoEntry,
 	SessionManager,
 	type SessionMessageEntry,
+	type SessionProjection,
+	type SessionTreeNode,
+	sessionEntryToContextMessages,
 	type ThinkingLevelChangeEntry,
-} from "./core/session-manager.js";
+} from "./core/session-manager.ts";
 export {
+	type CacheWarmingMode,
+	type CompactionModelOverride,
 	type CompactionSettings,
+	type DefaultProjectTrust,
+	type FullscreenExitOutput,
 	type ImageSettings,
 	type PackageSource,
+	type QuietStartup,
 	type RetrySettings,
 	SettingsManager,
-} from "./core/settings-manager.js";
+	type SettingsManagerCreateOptions,
+	type TuiMode,
+} from "./core/settings-manager.ts";
 // Skills
 export {
 	formatSkillsForPrompt,
@@ -224,8 +327,9 @@ export {
 	loadSkillsFromDir,
 	type Skill,
 	type SkillFrontmatter,
-} from "./core/skills.js";
-export { createSyntheticSourceInfo } from "./core/source-info.js";
+} from "./core/skills.ts";
+export { createSyntheticSourceInfo } from "./core/source-info.ts";
+export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
 // Tools
 export {
 	type BashOperations,
@@ -234,15 +338,14 @@ export {
 	type BashToolDetails,
 	type BashToolInput,
 	type BashToolOptions,
-	bashTool,
-	bashToolDefinition,
-	codingTools,
 	createBashToolDefinition,
 	createEditToolDefinition,
 	createFindToolDefinition,
 	createGrepToolDefinition,
 	createLocalBashOperations,
+	createLocalPowerShellOperations,
 	createLsToolDefinition,
+	createPowerShellToolDefinition,
 	createReadToolDefinition,
 	createWriteToolDefinition,
 	DEFAULT_MAX_BYTES,
@@ -251,33 +354,29 @@ export {
 	type EditToolDetails,
 	type EditToolInput,
 	type EditToolOptions,
-	editTool,
-	editToolDefinition,
 	type FindOperations,
 	type FindToolDetails,
 	type FindToolInput,
 	type FindToolOptions,
-	findTool,
-	findToolDefinition,
 	formatSize,
 	type GrepOperations,
 	type GrepToolDetails,
 	type GrepToolInput,
 	type GrepToolOptions,
-	grepTool,
-	grepToolDefinition,
 	type LsOperations,
 	type LsToolDetails,
 	type LsToolInput,
 	type LsToolOptions,
-	lsTool,
-	lsToolDefinition,
+	type PowerShellOperations,
+	type PowerShellSpawnContext,
+	type PowerShellSpawnHook,
+	type PowerShellToolDetails,
+	type PowerShellToolInput,
+	type PowerShellToolOptions,
 	type ReadOperations,
 	type ReadToolDetails,
 	type ReadToolInput,
 	type ReadToolOptions,
-	readTool,
-	readToolDefinition,
 	type ToolsOptions,
 	type TruncationOptions,
 	type TruncationResult,
@@ -288,26 +387,48 @@ export {
 	type WriteToolInput,
 	type WriteToolOptions,
 	withFileMutationQueue,
-	writeTool,
-	writeToolDefinition,
-} from "./core/tools/index.js";
+} from "./core/tools/index.ts";
+export {
+	hasTrustRequiringProjectResources,
+	type ProjectTrustDecision,
+	ProjectTrustStore,
+	type ProjectTrustStoreEntry,
+	type ProjectTrustUpdate,
+} from "./core/trust-manager.ts";
+export {
+	type ModelRoute,
+	type ModelRouteReason,
+	type ModelRouteRequest,
+	VIRTUAL_MODEL_STATE_ENTRY,
+	type VirtualModelDefinition,
+	type VirtualModelStateData,
+} from "./core/virtual-models.ts";
+// Built-in extensions. The CLI loads them; SDK sessions add them to their extension factories.
+export { type CodemodeExtensionOptions, createCodemodeExtension } from "./extensions/codemode/index.ts";
+export type { CodemodeStoreEntryData, CodemodeToolDetails } from "./extensions/codemode/tool.ts";
+export type { LoadedMcpConfig, McpExposure, McpServerConfig, McpServerEntry } from "./extensions/mcp/config.ts";
+export { createMcpExtension, type McpExtensionOptions, type McpTransportFactory } from "./extensions/mcp/index.ts";
+export { createToolSearchExtension } from "./extensions/tool-search/index.ts";
 // Main entry point
-export { type MainOptions, main } from "./main.js";
+export { type MainOptions, main } from "./main.ts";
 // Run modes for programmatic SDK usage
 export {
 	InteractiveMode,
 	type InteractiveModeOptions,
+	type JsonAgentSessionEvent,
 	type ModelInfo,
 	type PrintModeOptions,
 	RpcClient,
 	type RpcClientOptions,
 	type RpcCommand,
 	type RpcEventListener,
+	type RpcExtensionUIRequest,
+	type RpcExtensionUIResponse,
 	type RpcResponse,
 	type RpcSessionState,
 	runPrintMode,
 	runRpcMode,
-} from "./modes/index.js";
+} from "./modes/index.ts";
 // UI components for extensions
 export {
 	ArminComponent,
@@ -317,6 +438,7 @@ export {
 	BranchSummaryMessageComponent,
 	CompactionSummaryMessageComponent,
 	CustomEditor,
+	type CustomEditorOptions,
 	CustomMessageComponent,
 	DynamicBorder,
 	ExtensionEditorComponent,
@@ -346,7 +468,7 @@ export {
 	UserMessageComponent,
 	UserMessageSelectorComponent,
 	type VisualTruncateResult,
-} from "./modes/interactive/components/index.js";
+} from "./modes/interactive/components/index.ts";
 // Theme utilities for custom tools and extensions
 export {
 	getLanguageFromPath,
@@ -356,10 +478,17 @@ export {
 	highlightCode,
 	initTheme,
 	Theme,
+	type ThemeAppearance,
+	type ThemeBg,
 	type ThemeColor,
-} from "./modes/interactive/theme/theme.js";
+	type ThemeStyle,
+	type ThemeToken,
+} from "./modes/interactive/theme/theme.ts";
 // Clipboard utilities
-export { copyToClipboard } from "./utils/clipboard.js";
-export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.js";
+export { copyToClipboard } from "./utils/clipboard.ts";
+export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
+export { convertToPng } from "./utils/image-convert.ts";
+export { formatDimensionNote, type ResizedImage, resizeImage } from "./utils/image-resize.ts";
+export { detectSupportedImageMimeTypeFromFile } from "./utils/mime.ts";
 // Shell utilities
-export { getShellConfig } from "./utils/shell.js";
+export { getPowerShellConfig, getShellConfig } from "./utils/shell.ts";

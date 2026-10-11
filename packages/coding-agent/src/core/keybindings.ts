@@ -5,50 +5,24 @@ import {
 	type KeyId,
 	TUI_KEYBINDINGS,
 	KeybindingsManager as TuiKeybindingsManager,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { getAgentDir } from "../config.js";
+import { Compile } from "typebox/compile";
+import { getAgentDir } from "../config.ts";
+import { stripBom } from "../utils/text.ts";
+import { KeybindingValueSchema } from "./key-id-schema.ts";
 
-export interface AppKeybindings {
-	"app.interrupt": true;
-	"app.clear": true;
-	"app.exit": true;
-	"app.suspend": true;
-	"app.thinking.cycle": true;
-	"app.model.cycleForward": true;
-	"app.model.cycleBackward": true;
-	"app.model.select": true;
-	"app.tools.expand": true;
-	"app.thinking.toggle": true;
-	"app.session.toggleNamedFilter": true;
-	"app.editor.external": true;
-	"app.message.followUp": true;
-	"app.message.dequeue": true;
-	"app.clipboard.pasteImage": true;
-	"app.session.new": true;
-	"app.session.tree": true;
-	"app.session.fork": true;
-	"app.session.resume": true;
-	"app.tree.foldOrUp": true;
-	"app.tree.unfoldOrDown": true;
-	"app.tree.editLabel": true;
-	"app.tree.toggleLabelTimestamp": true;
-	"app.session.togglePath": true;
-	"app.session.toggleSort": true;
-	"app.session.rename": true;
-	"app.session.delete": true;
-	"app.session.deleteNoninvasive": true;
+export function useWindowsKeybindings(
+	platform: NodeJS.Platform = process.platform,
+	env: NodeJS.ProcessEnv = process.env,
+): boolean {
+	return platform === "win32" || (platform === "linux" && Boolean(env.WSL_DISTRO_NAME || env.WSL_INTEROP));
 }
 
-export type AppKeybinding = keyof AppKeybindings;
+const windowsKeybindings = useWindowsKeybindings();
 
-declare module "@mariozechner/pi-tui" {
-	interface Keybindings extends AppKeybindings {}
-}
-
-export const KEYBINDINGS = {
-	...TUI_KEYBINDINGS,
+const APP_KEYBINDINGS = {
 	"app.interrupt": { defaultKeys: "escape", description: "Cancel or abort" },
 	"app.clear": { defaultKeys: "ctrl+c", description: "Clear editor" },
 	"app.exit": { defaultKeys: "ctrl+d", description: "Exit when editor is empty" },
@@ -60,12 +34,16 @@ export const KEYBINDINGS = {
 		defaultKeys: "shift+tab",
 		description: "Cycle thinking level",
 	},
+	"app.thinking.save": {
+		defaultKeys: "ctrl+s",
+		description: "Save thinking level",
+	},
 	"app.model.cycleForward": {
 		defaultKeys: "ctrl+p",
 		description: "Cycle to next model",
 	},
 	"app.model.cycleBackward": {
-		defaultKeys: "shift+ctrl+p",
+		defaultKeys: windowsKeybindings ? "alt+p" : "shift+ctrl+p",
 		description: "Cycle to previous model",
 	},
 	"app.model.select": { defaultKeys: "ctrl+l", description: "Open model selector" },
@@ -82,28 +60,32 @@ export const KEYBINDINGS = {
 		defaultKeys: "ctrl+g",
 		description: "Open external editor",
 	},
+	"app.message.copy": {
+		defaultKeys: "ctrl+x",
+		description: "Copy selection or last assistant message",
+	},
 	"app.message.followUp": {
-		defaultKeys: "alt+enter",
+		defaultKeys: windowsKeybindings ? "ctrl+q" : "alt+enter",
 		description: "Queue follow-up message",
 	},
 	"app.message.dequeue": {
-		defaultKeys: "alt+up",
+		defaultKeys: windowsKeybindings ? "alt+q" : "alt+up",
 		description: "Restore queued messages",
 	},
 	"app.clipboard.pasteImage": {
-		defaultKeys: process.platform === "win32" ? "alt+v" : "ctrl+v",
-		description: "Paste image from clipboard",
+		defaultKeys: windowsKeybindings ? "alt+v" : "ctrl+v",
+		description: "Paste files on macOS, images, or text from clipboard",
 	},
 	"app.session.new": { defaultKeys: [], description: "Start a new session" },
 	"app.session.tree": { defaultKeys: [], description: "Open session tree" },
 	"app.session.fork": { defaultKeys: [], description: "Fork current session" },
 	"app.session.resume": { defaultKeys: [], description: "Resume a session" },
 	"app.tree.foldOrUp": {
-		defaultKeys: ["ctrl+left", "alt+left"],
+		defaultKeys: process.platform === "darwin" ? ["alt+left", "ctrl+left"] : ["ctrl+left", "alt+left"],
 		description: "Fold tree branch or move up",
 	},
 	"app.tree.unfoldOrDown": {
-		defaultKeys: ["ctrl+right", "alt+right"],
+		defaultKeys: process.platform === "darwin" ? ["alt+right", "ctrl+right"] : ["ctrl+right", "alt+right"],
 		description: "Unfold tree branch or move down",
 	},
 	"app.tree.editLabel": {
@@ -134,6 +116,86 @@ export const KEYBINDINGS = {
 		defaultKeys: "ctrl+backspace",
 		description: "Delete session when query is empty",
 	},
+	"app.models.save": {
+		defaultKeys: "ctrl+s",
+		description: "Save model selection",
+	},
+	"app.models.enableAll": {
+		defaultKeys: "ctrl+a",
+		description: "Enable all models",
+	},
+	"app.models.clearAll": {
+		defaultKeys: "ctrl+x",
+		description: "Clear all models",
+	},
+	"app.models.toggleProvider": {
+		defaultKeys: "ctrl+p",
+		description: "Toggle all models for provider",
+	},
+	"app.models.reorderUp": {
+		defaultKeys: "alt+up",
+		description: "Move model up in order",
+	},
+	"app.models.reorderDown": {
+		defaultKeys: "alt+down",
+		description: "Move model down in order",
+	},
+	"app.tree.filter.default": {
+		defaultKeys: "ctrl+d",
+		description: "Tree filter: default view",
+	},
+	"app.tree.filter.noTools": {
+		defaultKeys: "ctrl+t",
+		description: "Tree filter: hide tool results",
+	},
+	"app.tree.filter.userOnly": {
+		defaultKeys: "ctrl+u",
+		description: "Tree filter: user messages only",
+	},
+	"app.tree.filter.labeledOnly": {
+		defaultKeys: "ctrl+l",
+		description: "Tree filter: labeled entries only",
+	},
+	"app.tree.filter.all": {
+		defaultKeys: "ctrl+a",
+		description: "Tree filter: show all entries",
+	},
+	"app.tree.filter.cycleForward": {
+		defaultKeys: "ctrl+o",
+		description: "Tree filter: cycle forward",
+	},
+	"app.tree.filter.cycleBackward": {
+		defaultKeys: "shift+ctrl+o",
+		description: "Tree filter: cycle backward",
+	},
+} as const satisfies KeybindingDefinitions;
+
+export type AppKeybinding = keyof typeof APP_KEYBINDINGS;
+export type AppKeybindings = { [K in AppKeybinding]: true };
+
+declare module "@earendil-works/pi-tui" {
+	interface Keybindings extends AppKeybindings {}
+}
+
+export const KEYBINDINGS = {
+	...TUI_KEYBINDINGS,
+	"tui.editor.undo": {
+		...TUI_KEYBINDINGS["tui.editor.undo"],
+		defaultKeys: process.platform === "win32" ? "ctrl+z" : windowsKeybindings ? "alt+z" : "ctrl+-",
+	},
+	"tui.altScreen.previousPrompt": {
+		...TUI_KEYBINDINGS["tui.altScreen.previousPrompt"],
+		defaultKeys: windowsKeybindings ? "ctrl+up" : ["ctrl+shift+up", "ctrl+up"],
+	},
+	"tui.altScreen.nextPrompt": {
+		...TUI_KEYBINDINGS["tui.altScreen.nextPrompt"],
+		defaultKeys: windowsKeybindings ? "ctrl+down" : ["ctrl+shift+down", "ctrl+down"],
+	},
+	"tui.altScreen.search": {
+		...TUI_KEYBINDINGS["tui.altScreen.search"],
+		defaultKeys: windowsKeybindings ? "ctrl+f" : "ctrl+shift+f",
+	},
+	...APP_KEYBINDINGS,
 } as const satisfies KeybindingDefinitions;
 
 const KEYBINDING_NAME_MIGRATIONS = {
@@ -198,26 +260,17 @@ const KEYBINDING_NAME_MIGRATIONS = {
 	deleteSessionNoninvasive: "app.session.deleteNoninvasive",
 } as const satisfies Record<string, Keybinding>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isLegacyKeybindingName(key: string): key is keyof typeof KEYBINDING_NAME_MIGRATIONS {
 	return key in KEYBINDING_NAME_MIGRATIONS;
 }
 
-function toKeybindingsConfig(value: unknown): KeybindingsConfig {
-	if (!isRecord(value)) return {};
+const validateKeybindingValue = Compile(KeybindingValueSchema);
 
+function toKeybindingsConfig(value: Record<string, unknown>): KeybindingsConfig {
 	const config: KeybindingsConfig = {};
 	for (const [key, binding] of Object.entries(value)) {
-		if (typeof binding === "string") {
-			config[key] = binding as KeyId;
-			continue;
-		}
-		if (Array.isArray(binding) && binding.every((entry) => typeof entry === "string")) {
-			config[key] = binding as KeyId[];
-		}
+		if (key === "$schema") continue;
+		if (validateKeybindingValue.Check(binding)) config[key] = binding;
 	}
 	return config;
 }
@@ -265,8 +318,9 @@ function orderKeybindingsConfig(config: Record<string, unknown>): Record<string,
 function loadRawConfig(path: string): Record<string, unknown> | undefined {
 	if (!existsSync(path)) return undefined;
 	try {
-		const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
-		return isRecord(parsed) ? parsed : undefined;
+		const parsed = JSON.parse(stripBom(readFileSync(path, "utf-8"))) as unknown;
+		if (typeof parsed !== "object" || parsed === null) return undefined;
+		return parsed as Record<string, unknown>;
 	} catch {
 		return undefined;
 	}

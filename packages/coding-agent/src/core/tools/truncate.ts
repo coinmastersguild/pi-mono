@@ -44,6 +44,17 @@ export interface TruncationOptions {
 	maxBytes?: number;
 }
 
+function splitLinesForCounting(content: string): string[] {
+	if (content.length === 0) {
+		return [];
+	}
+	const lines = content.split("\n");
+	if (content.endsWith("\n")) {
+		lines.pop();
+	}
+	return lines;
+}
+
 /**
  * Format bytes as human-readable size.
  */
@@ -69,7 +80,7 @@ export function truncateHead(content: string, options: TruncationOptions = {}): 
 	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
 
 	const totalBytes = Buffer.byteLength(content, "utf-8");
-	const lines = content.split("\n");
+	const lines = splitLinesForCounting(content);
 	const totalLines = lines.length;
 
 	// Check if no truncation needed
@@ -159,7 +170,7 @@ export function truncateTail(content: string, options: TruncationOptions = {}): 
 	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
 
 	const totalBytes = Buffer.byteLength(content, "utf-8");
-	const lines = content.split("\n");
+	const lines = splitLinesForCounting(content);
 	const totalLines = lines.length;
 
 	// Check if no truncation needed
@@ -262,4 +273,42 @@ export function truncateLine(
 		return { text: line, wasTruncated: false };
 	}
 	return { text: `${line.slice(0, maxChars)}... [truncated]`, wasTruncated: true };
+}
+
+export interface MiddleTruncationResult {
+	/** The start and end of the content with a `…N chars truncated…` marker between them. */
+	content: string;
+	truncated: boolean;
+	/** Characters left out. */
+	removedChars: number;
+	totalBytes: number;
+	totalLines: number;
+}
+
+/**
+ * Keep the start and the end of `content`, half of `maxBytes` each, and replace the middle with a
+ * `…N chars truncated…` marker, like Codex does for tool output. Cuts only at character boundaries.
+ */
+export function truncateMiddle(content: string, maxBytes: number): MiddleTruncationResult {
+	const buf = Buffer.from(content, "utf-8");
+	const totalLines = splitLinesForCounting(content).length;
+	if (buf.length <= maxBytes) {
+		return { content, truncated: false, removedChars: 0, totalBytes: buf.length, totalLines };
+	}
+	// Continuation bytes (10xxxxxx) are not character starts.
+	const isBoundary = (index: number) => index >= buf.length || (buf[index] & 0xc0) !== 0x80;
+	let headEnd = Math.floor(maxBytes / 2);
+	while (headEnd > 0 && !isBoundary(headEnd)) headEnd--;
+	let tailStart = buf.length - (maxBytes - Math.floor(maxBytes / 2));
+	while (tailStart < buf.length && !isBoundary(tailStart)) tailStart++;
+	const head = buf.subarray(0, headEnd).toString("utf-8");
+	const tail = buf.subarray(tailStart).toString("utf-8");
+	const removedChars = Array.from(buf.subarray(headEnd, tailStart).toString("utf-8")).length;
+	return {
+		content: `${head}…${removedChars} chars truncated…${tail}`,
+		truncated: true,
+		removedChars,
+		totalBytes: buf.length,
+		totalLines,
+	};
 }

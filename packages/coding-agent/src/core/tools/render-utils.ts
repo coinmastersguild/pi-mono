@@ -1,8 +1,11 @@
 import * as os from "node:os";
-import { getCapabilities, getImageDimensions, imageFallback } from "@mariozechner/pi-tui";
-import type { ImageContent, TextContent } from "@pioneer-platform/pi-ai";
-import stripAnsi from "strip-ansi";
-import { sanitizeBinaryOutput } from "../../utils/shell.js";
+import { pathToFileURL } from "node:url";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import { getCapabilities, getImageDimensions, hyperlink, imageFallback } from "@earendil-works/pi-tui";
+import type { Theme } from "../../modes/interactive/theme/theme.ts";
+import { stripAnsi } from "../../utils/ansi.ts";
+import { resolvePath } from "../../utils/paths.ts";
+import { sanitizeBinaryOutput } from "../../utils/shell.ts";
 
 export function shortenPath(path: unknown): string {
 	if (typeof path !== "string") return "";
@@ -11,6 +14,12 @@ export function shortenPath(path: unknown): string {
 		return `~${path.slice(home.length)}`;
 	}
 	return path;
+}
+
+export function linkPath(styledText: string, rawPath: string, cwd: string): string {
+	if (!getCapabilities().hyperlinks) return styledText;
+	const absolutePath = resolvePath(rawPath, cwd);
+	return hyperlink(styledText, pathToFileURL(absolutePath).href);
 }
 
 export function str(value: unknown): string | null {
@@ -59,6 +68,45 @@ export type ToolRenderResultLike<TDetails> = {
 	details: TDetails;
 };
 
-export function invalidArgText(theme: { fg: (name: any, text: string) => string }): string {
+const COLLAPSED_ARGS_CHARS = 100;
+
+/**
+ * Generic tool call header: the title followed by the arguments. Collapsed, they are `key=value`
+ * pairs on the title line, cut to {@link COLLAPSED_ARGS_CHARS}. Expanded, each is a `key: value`
+ * line below the title, with strings shown raw and continuation lines indented.
+ */
+export function formatToolCallWithArgs(title: string, args: unknown, theme: Theme, expanded: boolean): string {
+	const header = theme.fg("toolTitle", theme.bold(title));
+	if (args == null) return header;
+	const entries =
+		typeof args === "object" && !Array.isArray(args)
+			? Object.entries(args)
+			: ([["args", args]] as [string, unknown][]);
+	if (entries.length === 0) return header;
+	if (expanded) {
+		const lines = entries.map(([key, value]) => {
+			const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
+			return `  ${key}: ${replaceTabs(text).replace(/\r/g, "").split("\n").join("\n    ")}`;
+		});
+		return `${header}\n${theme.fg("muted", lines.join("\n"))}`;
+	}
+	const pairs = entries.map(([key, value]) => `${key}=${JSON.stringify(value) ?? String(value)}`).join(" ");
+	const preview = pairs.length > COLLAPSED_ARGS_CHARS ? `${pairs.slice(0, COLLAPSED_ARGS_CHARS - 3)}...` : pairs;
+	return `${header} ${theme.fg("muted", preview)}`;
+}
+
+export function invalidArgText(theme: Theme): string {
 	return theme.fg("error", "[invalid arg]");
+}
+
+export function renderToolPath(
+	rawPath: string | null,
+	theme: Theme,
+	cwd: string,
+	options?: { emptyFallback?: string },
+): string {
+	if (rawPath === null) return invalidArgText(theme);
+	const value = rawPath || options?.emptyFallback;
+	if (!value) return theme.fg("toolOutput", "...");
+	return linkPath(theme.fg("accent", shortenPath(value)), value, cwd);
 }

@@ -1,19 +1,35 @@
 import { existsSync } from "node:fs";
-import { delimiter } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawn, spawnSync } from "child_process";
-import { getBinDir, getSettingsPath } from "../config.js";
-import { SettingsManager } from "../core/settings-manager.js";
+import { getBinDir } from "../config.ts";
 
-let cachedShellConfig: { shell: string; args: string[] } | null = null;
+export interface ShellConfig {
+	shell: string;
+	args: string[];
+	commandTransport?: "argv" | "stdin";
+}
 
 /**
  * Find bash executable on PATH (cross-platform)
  */
-function findBashOnPath(): string | null {
+function isLegacyWslBashPath(path: string): boolean {
+	const normalized = path.replace(/\//g, "\\").toLowerCase();
+	return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/.test(normalized);
+}
+
+function getBashShellConfig(shell: string): ShellConfig {
+	return isLegacyWslBashPath(shell) ? { shell, args: ["-s"], commandTransport: "stdin" } : { shell, args: ["-c"] };
+}
+
+function findExecutableOnPath(executable: string): string | null {
 	if (process.platform === "win32") {
 		// Windows: Use 'where' and verify file exists (where can return non-existent paths)
 		try {
-			const result = spawnSync("where", ["bash.exe"], { encoding: "utf-8", timeout: 5000 });
+			const result = spawnSync("where", [executable], {
+				encoding: "utf-8",
+				timeout: 5000,
+				windowsHide: true,
+			});
 			if (result.status === 0 && result.stdout) {
 				const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
 				if (firstMatch && existsSync(firstMatch)) {
@@ -28,7 +44,7 @@ function findBashOnPath(): string | null {
 
 	// Unix: Use 'which' and trust its output (handles Termux and special filesystems)
 	try {
-		const result = spawnSync("which", ["bash"], { encoding: "utf-8", timeout: 5000 });
+		const result = spawnSync("which", [executable], { encoding: "utf-8", timeout: 5000 });
 		if (result.status === 0 && result.stdout) {
 			const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
 			if (firstMatch) {
@@ -42,29 +58,19 @@ function findBashOnPath(): string | null {
 }
 
 /**
- * Get shell configuration based on platform.
+ * Resolve shell configuration based on platform and an optional explicit shell path.
  * Resolution order:
- * 1. User-specified shellPath in settings.json
+ * 1. User-specified shellPath
  * 2. On Windows: Git Bash in known locations, then bash on PATH
  * 3. On Unix: /bin/bash, then bash on PATH, then fallback to sh
  */
-export function getShellConfig(): { shell: string; args: string[] } {
-	if (cachedShellConfig) {
-		return cachedShellConfig;
-	}
-
-	const settings = SettingsManager.create();
-	const customShellPath = settings.getShellPath();
-
+export function getShellConfig(customShellPath?: string): ShellConfig {
 	// 1. Check user-specified shell path
 	if (customShellPath) {
 		if (existsSync(customShellPath)) {
-			cachedShellConfig = { shell: customShellPath, args: ["-c"] };
-			return cachedShellConfig;
+			return getBashShellConfig(customShellPath);
 		}
-		throw new Error(
-			`Custom shell path not found: ${customShellPath}\nPlease update shellPath in ${getSettingsPath()}`,
-		);
+		throw new Error(`Custom shell path not found: ${customShellPath}`);
 	}
 
 	if (process.platform === "win32") {
@@ -81,41 +87,52 @@ export function getShellConfig(): { shell: string; args: string[] } {
 
 		for (const path of paths) {
 			if (existsSync(path)) {
-				cachedShellConfig = { shell: path, args: ["-c"] };
-				return cachedShellConfig;
+				return getBashShellConfig(path);
 			}
 		}
 
 		// 3. Fallback: search bash.exe on PATH (Cygwin, MSYS2, WSL, etc.)
-		const bashOnPath = findBashOnPath();
+		const bashOnPath = findExecutableOnPath("bash.exe");
 		if (bashOnPath) {
-			cachedShellConfig = { shell: bashOnPath, args: ["-c"] };
-			return cachedShellConfig;
+			return getBashShellConfig(bashOnPath);
 		}
 
 		throw new Error(
 			`No bash shell found. Options:\n` +
 				`  1. Install Git for Windows: https://git-scm.com/download/win\n` +
 				`  2. Add your bash to PATH (Cygwin, MSYS2, etc.)\n` +
-				`  3. Set shellPath in ${getSettingsPath()}\n\n` +
+				"  3. Set shellPath in settings.json\n\n" +
 				`Searched Git Bash in:\n${paths.map((p) => `  ${p}`).join("\n")}`,
 		);
 	}
 
 	// Unix: try /bin/bash, then bash on PATH, then fallback to sh
 	if (existsSync("/bin/bash")) {
-		cachedShellConfig = { shell: "/bin/bash", args: ["-c"] };
-		return cachedShellConfig;
+		return getBashShellConfig("/bin/bash");
 	}
 
-	const bashOnPath = findBashOnPath();
+	const bashOnPath = findExecutableOnPath("bash");
 	if (bashOnPath) {
-		cachedShellConfig = { shell: bashOnPath, args: ["-c"] };
-		return cachedShellConfig;
+		return getBashShellConfig(bashOnPath);
 	}
 
-	cachedShellConfig = { shell: "sh", args: ["-c"] };
-	return cachedShellConfig;
+	return { shell: "sh", args: ["-c"] };
+}
+
+export const POWERSHELL_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"] as const;
+
+/** Resolve PowerShell on Windows, preferring PowerShell 7 when available. */
+export function getPowerShellConfig(): ShellConfig {
+	if (process.platform !== "win32") {
+		throw new Error("The powershell tool is only available on Windows.");
+	}
+
+	const shell = findExecutableOnPath("pwsh.exe") ?? findExecutableOnPath("powershell.exe");
+	if (!shell) {
+		throw new Error("No PowerShell executable found. Install PowerShell or add powershell.exe/pwsh.exe to PATH.");
+	}
+
+	return { shell, args: [...POWERSHELL_ARGS] };
 }
 
 export function getShellEnv(): NodeJS.ProcessEnv {
@@ -136,40 +153,11 @@ export function getShellEnv(): NodeJS.ProcessEnv {
  * Sanitize binary output for display/storage.
  * Removes characters that crash string-width or cause display issues:
  * - Control characters (except tab, newline, carriage return)
- * - Lone surrogates
- * - Unicode Format characters (crash string-width due to a bug)
- * - Characters with undefined code points
+ * - Unicode interlinear annotation characters U+FFF9..U+FFFB (crash string-width due to a bug)
  */
 export function sanitizeBinaryOutput(str: string): string {
-	// Use Array.from to properly iterate over code points (not code units)
-	// This handles surrogate pairs correctly and catches edge cases where
-	// codePointAt() might return undefined
-	return Array.from(str)
-		.filter((char) => {
-			// Filter out characters that cause string-width to crash
-			// This includes:
-			// - Unicode format characters
-			// - Lone surrogates (already filtered by Array.from)
-			// - Control chars except \t \n \r
-			// - Characters with undefined code points
-
-			const code = char.codePointAt(0);
-
-			// Skip if code point is undefined (edge case with invalid strings)
-			if (code === undefined) return false;
-
-			// Allow tab, newline, carriage return
-			if (code === 0x09 || code === 0x0a || code === 0x0d) return true;
-
-			// Filter out control characters (0x00-0x1F, except 0x09, 0x0a, 0x0x0d)
-			if (code <= 0x1f) return false;
-
-			// Filter out Unicode format characters
-			if (code >= 0xfff9 && code <= 0xfffb) return false;
-
-			return true;
-		})
-		.join("");
+	// All removed characters are single UTF-16 code units, so surrogate pairs are never split.
+	return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFF9-\uFFFB]/g, "");
 }
 
 /**
@@ -198,14 +186,21 @@ export function killTrackedDetachedChildren(): void {
  */
 export function killProcessTree(pid: number): void {
 	if (process.platform === "win32") {
-		// Use taskkill on Windows to kill process tree
+		// Use the trusted System32 executable so cleanup does not depend on PATH.
 		try {
-			spawn("taskkill", ["/F", "/T", "/PID", String(pid)], {
-				stdio: "ignore",
-				detached: true,
-			});
+			const child = spawn(
+				join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"),
+				["/F", "/T", "/PID", String(pid)],
+				{
+					stdio: "ignore",
+					detached: true,
+					windowsHide: true,
+				},
+			);
+			// A failed spawn emits "error" asynchronously; consume it to avoid crashing Node.
+			child.once("error", () => {});
 		} catch {
-			// Ignore errors if taskkill fails
+			// Ignore errors if taskkill fails.
 		}
 	} else {
 		// Use SIGKILL on Unix/Linux/Mac

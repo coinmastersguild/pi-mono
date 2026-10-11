@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pioneer — Follow your own path</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050910;color:#b7c6d8;font:14px ui-monospace,SFMono-Regular,monospace}main{max-width:1200px;margin:36px auto;padding:0 28px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}small{color:#668197;letter-spacing:2px}a{color:#65cbaa;text-decoration:none}h1{font-size:15px;color:#e0e9f3;font-weight:500;letter-spacing:3px}section{border:1px solid #213146;border-radius:12px;overflow:hidden;background:#080e20;box-shadow:0 24px 100px #0008}canvas{display:block;width:100%;image-rendering:pixelated}.wordmark{text-align:center;color:#42dc7e;font-size:clamp(22px,5vw,60px);font-weight:900;letter-spacing:.25em;padding:20px 0 4px;text-shadow:0 0 25px #42dc7e33}.tagline{text-align:center;letter-spacing:3px;color:#799788;padding:0 10px 26px;font-size:11px}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px;border-top:1px solid #213146;background:#0c1421}button,select{font:inherit;color:#b7c6d8;background:#122234;border:1px solid #294158;border-radius:5px;padding:8px 12px;cursor:pointer}button:hover{border-color:#42dc7e}input{flex:1;min-width:100px;accent-color:#42dc7e}footer{display:flex;gap:24px;justify-content:space-between;margin:22px 0;color:#61778f;font-size:12px}code{color:#c4d7c7}
+</style>
+<main><header><h1>PIONEER / TRAIL INTRO</h1><small>3D TERMINAL STUDY · 01</small></header>
+<section><canvas aria-label="Animated three dimensional alpine trail and sparkling Bitcoin emblem"></canvas><div class="wordmark">PIONEER</div><div class="tagline">FOLLOW YOUR OWN PATH</div>
+<div class="controls"><button id="replay">Replay</button><button id="play">Pause</button><select id="mode" aria-label="Rendering style"><option value="ascii">ASCII</option><option value="pixel">Half-block</option></select><select id="size" aria-label="Terminal size"><option>160x50</option><option>120x40</option><option>80x24</option></select><input id="time" aria-label="Animation time" type="range" min="0" max="9000" step="1"><span id="stamp"></span></div></section>
+<footer><span>CLI: <code>/intro</code> · <code>/intro ascii</code> · launch with <code>--no-intro</code> to skip</span><span><a href="../imagegen/pioneer-night-expedition-v1.png">Art reference</a> · <a href="https://github.com/tweakyourpc/vertex-city">Vertex City</a></span></footer></main>
+<script>(() => {
+  // packages/coding-agent/src/modes/interactive/components/pioneer-intro-scene.ts
+  var PIONEER_INTRO_DURATION_MS = 9e3;
+  var SKY = 527904;
+  var FOV_SCALE = Math.tan(Math.PI / 5);
+  var BITCOIN = [
+    "..#.#...",
+    ".######.",
+    "..#...##",
+    "..#...##",
+    "..#####.",
+    "..#...##",
+    "..#...##",
+    ".######.",
+    "..#.#..."
+  ];
+  var HIKER = [
+    "...hh...",
+    "...hh...",
+    "..booo..",
+    ".bbooo..",
+    ".bbooo.h",
+    "..ooo.hh",
+    "..ooo..h",
+    "..o.o..h",
+    ".oo.oo.h"
+  ];
+  var PEAKS = [
+    [-110, 118, 73, 0.9],
+    [-73, 170, 102, 0.95],
+    [-30, 238, 136, 1.05],
+    [32, 264, 100, 0.95],
+    [102, 228, 127, 1.1],
+    [136, 152, 81, 0.95]
+  ];
+  function rgb(r, g, b) {
+    return Math.max(0, Math.min(255, Math.round(r))) << 16 | Math.max(0, Math.min(255, Math.round(g))) << 8 | Math.max(0, Math.min(255, Math.round(b)));
+  }
+  function mix(a, b, amount) {
+    const t = Math.max(0, Math.min(1, amount));
+    return rgb(
+      (a >> 16) * (1 - t) + (b >> 16) * t,
+      (a >> 8 & 255) * (1 - t) + (b >> 8 & 255) * t,
+      (a & 255) * (1 - t) + (b & 255) * t
+    );
+  }
+  function hash(n) {
+    const value = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return value - Math.floor(value);
+  }
+  function pioneerTrailX(z) {
+    return -27 + Math.sin(z * 0.043) * 8;
+  }
+  function lakeDistance(x, z) {
+    return Math.hypot((x - 32) / 48, (z - 117) / 63);
+  }
+  function pioneerTerrainHeight(x, z) {
+    const lake = lakeDistance(x, z);
+    if (lake < 1) return 0;
+    const foothills = 4 + 2.5 * Math.sin(x * 0.11 + z * 0.06) + 1.5 * Math.cos(z * 0.09);
+    let height = Math.min(1, (lake - 1) * 3) * foothills;
+    const ridge = Math.sin(x * 0.31 + z * 0.17) * 2.5 + Math.sin(x * 0.1 - z * 0.21) * 3;
+    for (const [px, pz, peak, slope] of PEAKS) {
+      const distance = Math.hypot(x - px, (z - pz) * 0.92);
+      height = Math.max(height, (peak - distance * slope + ridge) * 0.6);
+    }
+    return Math.max(0, height) * Math.min(1, (lake - 1) * 3);
+  }
+  function pioneerIntroCamera(elapsedMs) {
+    const progress = Math.max(0, Math.min(1, (elapsedMs - 500) / 6800));
+    const travel = progress * progress * (3 - 2 * progress);
+    const z = -35 + travel * 100;
+    const x = pioneerTrailX(z);
+    const lookAhead = pioneerTrailX(z + 25);
+    return {
+      x,
+      z,
+      y: pioneerTerrainHeight(x, z) + 7 + travel * 4,
+      yaw: Math.atan2(lookAhead - x, 25) * (1 - travel * 0.65) + travel * 0.12,
+      pitch: -0.04 + travel * 0.015
+    };
+  }
+  var PioneerIntroScene = class {
+    // Cache world samples, independent of screen resolution and animation time.
+    heights = new Float32Array(321 * 401);
+    trees = [];
+    constructor() {
+      for (let z = 0; z <= 400; z++) {
+        for (let x = 0; x <= 320; x++) this.heights[z * 321 + x] = pioneerTerrainHeight(x - 160, z - 40);
+      }
+      for (let i = 0; i < 300; i++) {
+        const x = hash(i * 3) * 230 - 115;
+        const z = hash(i * 3 + 1) * 200 - 20;
+        const y = this.heightAt(x, z);
+        if (lakeDistance(x, z) > 1.07 && y < 35 && Math.abs(x - pioneerTrailX(z)) > 3) this.trees.push({ x, y, z });
+      }
+    }
+    heightAt(x, z) {
+      const ix = Math.round(x + 160);
+      const iz = Math.round(z + 40);
+      return ix < 0 || ix > 320 || iz < 0 || iz > 400 ? pioneerTerrainHeight(x, z) : this.heights[iz * 321 + ix];
+    }
+    render(columns, rows, elapsedMs) {
+      const width = Math.max(1, Math.min(320, Math.floor(columns)));
+      const height = Math.max(2, Math.min(180, Math.floor(rows) * 2));
+      const pixels = new Uint32Array(width * height);
+      const depth = new Float32Array(width * height).fill(Number.POSITIVE_INFINITY);
+      const camera = pioneerIntroCamera(elapsedMs);
+      const frame = { width, height, pixels, depth, camera };
+      const projection = Math.min(width / (2 * FOV_SCALE), height);
+      const horizon = height * 0.67 + camera.pitch * projection;
+      const sin = Math.sin(camera.yaw), cos = Math.cos(camera.yaw);
+      const seconds = elapsedMs / 1e3;
+      const project = (point) => {
+        const dx = point.x - camera.x, dz = point.z - camera.z;
+        const d = dx * sin + dz * cos;
+        if (d < 0.8) return void 0;
+        return {
+          x: width / 2 + (dx * cos - dz * sin) * projection / d,
+          y: horizon - (point.y - camera.y) * projection / d,
+          d,
+          scale: projection / d
+        };
+      };
+      const plot = (x, y, color, distance = Number.POSITIVE_INFINITY) => {
+        const px = Math.round(x), py = Math.round(y);
+        if (px < 0 || px >= width || py < 0 || py >= height) return;
+        const index = py * width + px;
+        if (distance > depth[index]) return;
+        pixels[index] = color;
+        depth[index] = distance;
+      };
+      for (let y = 0; y < height; y++) pixels.fill(mix(SKY, 2241353, y / height * 0.7), y * width, (y + 1) * width);
+      for (let i = 0; i < 130; i++) {
+        const angle = (hash(i + 400) - 0.5) * 2.3 - camera.yaw;
+        const x = width / 2 + Math.tan(angle) * projection;
+        const y = horizon - (0.18 + hash(i + 600) * 0.9) * projection;
+        const brightness = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(seconds * 1.8 + i * 2.4));
+        plot(x, y, mix(5138059, 16777215, brightness));
+        if (i % 19 === 0 && brightness > 0.9) {
+          plot(x - 1, y, 5268616);
+          plot(x + 1, y, 5268616);
+          plot(x, y - 1, 5268616);
+          plot(x, y + 1, 5268616);
+        }
+      }
+      const moonX = width / 2 + Math.tan(0.43 - camera.yaw) * projection;
+      const moonY = horizon - projection * 0.46;
+      const moonRadius = Math.max(1.3, projection * 0.04);
+      for (let y = -Math.ceil(moonRadius); y <= moonRadius; y++) {
+        for (let x = -Math.ceil(moonRadius); x <= moonRadius; x++) {
+          if (x * x + y * y <= moonRadius * moonRadius)
+            plot(moonX + x, moonY + y, mix(16566124, 16772541, hash(x + y * 7)));
+        }
+      }
+      for (let column = 0; column < width; column++) {
+        const side = (column + 0.5 - width / 2) / projection;
+        const rayX = sin + cos * side, rayZ = cos - sin * side;
+        let bottom = height;
+        for (let distance = 1; distance < 370 && bottom > 0; distance += 0.55 + distance * 0.018) {
+          const x = camera.x + rayX * distance, z = camera.z + rayZ * distance;
+          const terrain = this.heightAt(x, z);
+          const top = Math.max(0, Math.floor(horizon + (camera.y - terrain) * projection / distance));
+          if (top >= bottom) continue;
+          let color;
+          if (lakeDistance(x, z) < 1 && terrain < 1) {
+            const ripple = Math.sin(z * 2.8 + seconds * 2.1 + Math.sin(x * 0.4)) * 0.5 + 0.5;
+            const reflection = Math.max(0, Math.sin(x * 0.09 + z * 0.045)) * 0.55;
+            color = mix(21108, 3071999, ripple * 0.45 + reflection);
+          } else if (z < 165 && Math.abs(x - pioneerTrailX(z)) < 1.8) {
+            color = mix(8477493, 12684364, 0.5 + 0.3 * Math.sin(z * 1.4));
+          } else {
+            const slope = (this.heightAt(x - 1, z + 1) - terrain) * 0.15;
+            const light = Math.max(0.15, Math.min(0.95, 0.48 + slope));
+            const snow = terrain > 29 + Math.sin(x * 0.22 + z * 0.09) * 4;
+            color = snow ? mix(6519185, 15199731, light) : mix(1581622, 6780295, light);
+          }
+          color = mix(color, 2505041, Math.min(0.55, distance / 650));
+          for (let y = top; y < bottom; y++) {
+            pixels[y * width + column] = color;
+            depth[y * width + column] = distance;
+          }
+          bottom = top;
+        }
+      }
+      for (const tree of this.trees) {
+        const base = project(tree);
+        if (!base || base.d > 180) continue;
+        const size2 = Math.max(1, base.scale * (3.5 + hash(tree.x) * 2));
+        const color = mix(463906, 2438216, base.d / 260);
+        for (let y = 0; y < size2; y++) {
+          const halfWidth = y / size2 * size2 * 0.3;
+          for (let x = -halfWidth; x <= halfWidth; x++) plot(base.x + x, base.y - size2 + y, color, base.d);
+        }
+      }
+      const hikerZ = -14, hikerX = pioneerTrailX(hikerZ) - 4;
+      for (let row = 0; row < HIKER.length; row++) {
+        for (let col = 0; col < HIKER[row].length; col++) {
+          const cell = HIKER[row][col];
+          if (cell === ".") continue;
+          const p = project({
+            x: hikerX + (col - 4) * 0.35,
+            y: this.heightAt(hikerX, hikerZ) + (9 - row) * 0.48,
+            z: hikerZ
+          });
+          if (!p) continue;
+          for (let y = 0; y < Math.max(1, p.scale * 0.5); y++) {
+            for (let x = 0; x < Math.max(1, p.scale * 0.4); x++)
+              plot(p.x + x, p.y + y, cell === "o" ? 13989413 : cell === "h" ? 15115099 : 5847845, p.d);
+          }
+        }
+      }
+      const coin = { x: -81, y: 89, z: 245 };
+      for (let layer = 2; layer >= 0; layer--) {
+        for (let row = 0; row < BITCOIN.length; row++) {
+          for (let col = 0; col < BITCOIN[row].length; col++) {
+            if (BITCOIN[row][col] !== "#") continue;
+            const p = project({
+              x: coin.x + (col - 4) * 3 + layer * 0.7,
+              y: coin.y + (4 - row) * 3 - layer * 0.3,
+              z: coin.z + layer
+            });
+            if (!p) continue;
+            const glint = Math.max(0, Math.cos(col * 0.5 - row * 0.22 - seconds * 2.2)) ** 12;
+            const color = layer ? 11099415 : mix(16098851, 16774606, glint);
+            for (let y = 0; y < Math.max(1, p.scale * 3); y++) {
+              for (let x = 0; x < Math.max(1, p.scale * 3); x++) plot(p.x + x, p.y + y, color, p.d);
+            }
+          }
+        }
+      }
+      for (let i = 0; i < 5; i++) {
+        const p = project({ x: coin.x + Math.cos(i * 2.4) * 17, y: coin.y + Math.sin(i * 2.4) * 17, z: coin.z - 2 });
+        const sparkle = Math.max(0, Math.sin(seconds * 3 + i * 1.7)) ** 10;
+        if (!p || sparkle < 0.1) continue;
+        plot(p.x, p.y, mix(13732912, 16777215, sparkle), p.d);
+        if (sparkle > 0.65) {
+          for (const [dx, dy] of [
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1]
+          ])
+            plot(p.x + dx, p.y + dy, 16768384, p.d);
+        }
+      }
+      return frame;
+    }
+  };
+  var ASCII_RAMP = "  .,:;irsXA253hMHGS#9B&@";
+  var ASCII_CELLS = /* @__PURE__ */ new Map();
+  var CUBE = [0, 95, 135, 175, 215, 255];
+  function pioneerAsciiCell(a, b) {
+    const color = mix(a, b, 0.5) & 16316664;
+    const cached = ASCII_CELLS.get(color);
+    if (cached) return cached;
+    const r = color >> 16, g = color >> 8 & 255, blue = color & 255;
+    const luminance = (r * 0.21 + g * 0.72 + blue * 0.07) / 255;
+    const glyph = luminance < 0.11 ? " " : ASCII_RAMP[Math.min(ASCII_RAMP.length - 1, Math.floor(luminance ** 0.65 * (ASCII_RAMP.length - 1)))];
+    const indices = [r, g, blue].map((channel) => channel < 48 ? 0 : channel < 115 ? 1 : Math.min(5, Math.floor((channel - 115) / 40) + 2));
+    let index = 16 + indices[0] * 36 + indices[1] * 6 + indices[2];
+    let mapped = rgb(CUBE[indices[0]], CUBE[indices[1]], CUBE[indices[2]]);
+    if (Math.max(r, g, blue) - Math.min(r, g, blue) < 24) {
+      const gray = Math.max(0, Math.min(23, Math.round((luminance * 255 - 8) / 10)));
+      index = 232 + gray;
+      mapped = rgb(8 + gray * 10, 8 + gray * 10, 8 + gray * 10);
+    }
+    const cell = { glyph, color: mapped, ansi: `\x1B[38;5;${index}m` };
+    ASCII_CELLS.set(color, cell);
+    return cell;
+  }
+
+  // <stdin>
+  var scene = new PioneerIntroScene();
+  var canvas = document.querySelector("canvas");
+  var ctx = canvas.getContext("2d");
+  var raster = document.createElement("canvas");
+  var rasterCtx = raster.getContext("2d");
+  var scrubber = document.querySelector("#time");
+  var play = document.querySelector("#play");
+  var mode = document.querySelector("#mode");
+  var size = document.querySelector("#size");
+  var elapsed = 0;
+  var running = true;
+  var previous = performance.now();
+  var lastDraw = -100;
+  function draw() {
+    const [width, rows] = size.value.split("x").map(Number);
+    const frame = scene.render(width, rows - 8, elapsed);
+    canvas.width = width * 8;
+    canvas.height = frame.height * 8;
+    if (mode.value === "pixel") {
+      raster.width = width;
+      raster.height = frame.height;
+      const data = rasterCtx.createImageData(width, frame.height);
+      frame.pixels.forEach((p, i) => {
+        data.data[i * 4] = p >> 16;
+        data.data[i * 4 + 1] = p >> 8 & 255;
+        data.data[i * 4 + 2] = p & 255;
+        data.data[i * 4 + 3] = 255;
+      });
+      rasterCtx.putImageData(data, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(raster, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = "#080e20";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = "14px monospace";
+      ctx.textBaseline = "top";
+      for (let y = 0; y < frame.height; y += 2) for (let x = 0; x < width; x++) {
+        const a = frame.pixels[y * width + x], b = frame.pixels[(y + 1) * width + x];
+        const cell = pioneerAsciiCell(a, b);
+        ctx.fillStyle = "#" + cell.color.toString(16).padStart(6, "0");
+        ctx.fillText(cell.glyph, x * 8, y * 8);
+      }
+    }
+    scrubber.value = elapsed;
+    document.querySelector("#stamp").textContent = (elapsed / 1e3).toFixed(1) + " / 9.0 s";
+  }
+  play.onclick = () => {
+    running = !running;
+    if (running && elapsed >= PIONEER_INTRO_DURATION_MS) elapsed = 0;
+    play.textContent = running ? "Pause" : "Play";
+  };
+  document.querySelector("#replay").onclick = () => {
+    elapsed = 0;
+    running = true;
+    play.textContent = "Pause";
+  };
+  scrubber.oninput = () => {
+    elapsed = Number(scrubber.value);
+    running = false;
+    play.textContent = "Play";
+    draw();
+  };
+  mode.onchange = draw;
+  size.onchange = draw;
+  function tick(now) {
+    if (running) elapsed = Math.min(PIONEER_INTRO_DURATION_MS, elapsed + now - previous);
+    previous = now;
+    if (now - lastDraw > 66) {
+      draw();
+      lastDraw = now;
+    }
+    if (elapsed >= PIONEER_INTRO_DURATION_MS) {
+      running = false;
+      play.textContent = "Play";
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script></html>

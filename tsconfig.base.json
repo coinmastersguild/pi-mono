@@ -1,9 +1,11 @@
 {
 	"compilerOptions": {
-		"target": "ES2022",
+		"target": "ES2024",
 		"module": "Node16",
-		"lib": ["ES2022"],
+		"lib": ["ES2024"],
 		"strict": true,
+		"erasableSyntaxOnly": true,
+		"verbatimModuleSyntax": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
@@ -14,10 +16,8 @@
 		"inlineSourceMap": false,
 		"moduleResolution": "Node16",
 		"resolveJsonModule": true,
-		"allowImportingTsExtensions": false,
-		"experimentalDecorators": true,
-		"emitDecoratorMetadata": true,
-		"useDefineForClassFields": false,
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true,
 		"types": ["node"]
 	}
 }

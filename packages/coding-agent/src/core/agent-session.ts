@@ -72,6 +72,7 @@ import {
 	compact,
 	estimateContextTokens,
 	estimateProjectedContextTokens,
+	estimateRequestTokens,
 	estimateTokens,
 	generateBranchSummary,
 	prepareCompaction,
@@ -517,6 +518,7 @@ export class AgentSession {
 		this._installAgentBoundaryHooks();
 		this._installHiddenDeclarationsProjection();
 		this._installAgentForcedPromptProjection();
+		this._installContextBudgetGuard();
 
 		this._buildRuntime({
 			activeToolNames: this._initialActiveToolNames,
@@ -767,7 +769,10 @@ export class AgentSession {
 	private _exceedsCompactionThreshold(model: Model<any>, projection: SessionProjection): boolean {
 		if (model.contextWindow <= 0) return false;
 		return shouldCompact(
-			estimateProjectedContextTokens(projection, this.sessionManager.getBranch()).tokens,
+			Math.max(
+				estimateProjectedContextTokens(projection, this.sessionManager.getBranch()).tokens,
+				estimateRequestTokens(projection.messages),
+			),
 			model.contextWindow,
 			this.settingsManager.getCompactionSettings(this.model),
 		);
@@ -811,7 +816,14 @@ export class AgentSession {
 			let { previous, context, projection } = await prepare();
 			const model = previous?.model ?? this.agent.state.model;
 			const thinkingLevel = previous?.thinkingLevel ?? this.agent.state.thinkingLevel;
-			if (!isVirtualModel(model)) return { ...previous, context, model, thinkingLevel };
+			if (!isVirtualModel(model)) {
+				// Include the newly submitted prompt, not only the previous assistant's usage.
+				if (this._exceedsCompactionThreshold(model, projection)) {
+					await this._runAutoCompaction("threshold", false);
+					({ previous, context } = await prepare());
+				}
+				return { ...previous, context, model, thinkingLevel };
+			}
 
 			// The selection stays in agent state; only this request uses the routed model. A routing
 			// failure rejects, which ends the run with an error response. Only messages the user wrote
@@ -1798,6 +1810,21 @@ export class AgentSession {
 				timestamp: current?.timestamp ?? Date.now(),
 			};
 			return [head, ...transformed.filter((message) => message.role !== "system")];
+		};
+	}
+
+	private _installContextBudgetGuard(): void {
+		const previousTransform = this.agent.transformContext;
+		this.agent.transformContext = async (messages, signal) => {
+			const transformed = previousTransform ? await previousTransform(messages, signal) : messages;
+			const limit = this.settingsManager.getCompactionMaxContextTokens(this.model);
+			const tokens = estimateRequestTokens(transformed);
+			if (limit > 0 && tokens > limit) {
+				throw new Error(
+					`Pioneer working context exceeds the configured budget (${tokens} estimated tokens; limit ${limit}). Use /compact, reduce the prompt/tool loadout, or increase compaction.maxContextTokens.`,
+				);
+			}
+			return transformed;
 		};
 	}
 
@@ -2951,6 +2978,8 @@ export class AgentSession {
 	): Promise<boolean> {
 		const settings = this.settingsManager.getCompactionSettings(this.model);
 		if (!settings.enabled) return false;
+		if (assistantMessage.errorMessage?.startsWith("Pioneer working context exceeds the configured budget"))
+			return false;
 
 		// Skip if message was aborted (user cancelled) - unless skipAbortedCheck is false
 		if (skipAbortedCheck && assistantMessage.stopReason === "aborted") return false;
@@ -4238,7 +4267,8 @@ export class AgentSession {
 		const model = this._limitsModel();
 		if (!model) return undefined;
 
-		const contextWindow = model.contextWindow ?? 0;
+		const cap = this.settingsManager.getCompactionMaxContextTokens(this.model);
+		const contextWindow = cap > 0 ? Math.min(model.contextWindow ?? 0, cap) : (model.contextWindow ?? 0);
 		if (contextWindow <= 0) return undefined;
 
 		// After compaction, the last assistant usage reflects pre-compaction context size.

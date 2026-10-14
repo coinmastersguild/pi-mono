@@ -29,6 +29,7 @@ import { OPENAI_CODEX_CLASSIFIER_MODELS, OPENAI_CODEX_IMAGE_MODELS, OPENAI_CODEX
 import { OPENCODE_CLASSIFIER_MODELS, OPENCODE_IMAGE_MODELS, OPENCODE_MODELS } from "./providers/opencode.models.ts";
 import { OPENCODE_GO_CLASSIFIER_MODELS, OPENCODE_GO_IMAGE_MODELS, OPENCODE_GO_MODELS } from "./providers/opencode-go.models.ts";
 import { OPENROUTER_CLASSIFIER_MODELS, OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } from "./providers/openrouter.models.ts";
+import { PIONEER_CLASSIFIER_MODELS, PIONEER_IMAGE_MODELS, PIONEER_MODELS } from "./providers/pioneer.models.ts";
 import { QWEN_TOKEN_PLAN_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_IMAGE_MODELS, QWEN_TOKEN_PLAN_MODELS } from "./providers/qwen-token-plan.models.ts";
 import { QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_CN_IMAGE_MODELS, QWEN_TOKEN_PLAN_CN_MODELS } from "./providers/qwen-token-plan-cn.models.ts";
 import { QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS, QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS } from "./providers/qwen-token-plan-individual.models.ts";
@@ -73,6 +74,7 @@ export const MODELS: {
 	readonly "opencode": typeof OPENCODE_MODELS;
 	readonly "opencode-go": typeof OPENCODE_GO_MODELS;
 	readonly "openrouter": typeof OPENROUTER_MODELS;
+	readonly "pioneer": typeof PIONEER_MODELS;
 	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_MODELS;
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS;
@@ -116,6 +118,7 @@ export const MODELS: {
 	"opencode": OPENCODE_MODELS,
 	"opencode-go": OPENCODE_GO_MODELS,
 	"openrouter": OPENROUTER_MODELS,
+	"pioneer": PIONEER_MODELS,
 	"qwen-token-plan": QWEN_TOKEN_PLAN_MODELS,
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS,
@@ -161,6 +164,7 @@ export const IMAGE_MODELS: {
 	readonly "opencode": typeof OPENCODE_IMAGE_MODELS;
 	readonly "opencode-go": typeof OPENCODE_GO_IMAGE_MODELS;
 	readonly "openrouter": typeof OPENROUTER_IMAGE_MODELS;
+	readonly "pioneer": typeof PIONEER_IMAGE_MODELS;
 	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_IMAGE_MODELS;
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_IMAGE_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS;
@@ -204,6 +208,7 @@ export const IMAGE_MODELS: {
 	"opencode": OPENCODE_IMAGE_MODELS,
 	"opencode-go": OPENCODE_GO_IMAGE_MODELS,
 	"openrouter": OPENROUTER_IMAGE_MODELS,
+	"pioneer": PIONEER_IMAGE_MODELS,
 	"qwen-token-plan": QWEN_TOKEN_PLAN_IMAGE_MODELS,
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_IMAGE_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS,
@@ -249,6 +254,7 @@ export const CLASSIFIER_MODELS: {
 	readonly "opencode": typeof OPENCODE_CLASSIFIER_MODELS;
 	readonly "opencode-go": typeof OPENCODE_GO_CLASSIFIER_MODELS;
 	readonly "openrouter": typeof OPENROUTER_CLASSIFIER_MODELS;
+	readonly "pioneer": typeof PIONEER_CLASSIFIER_MODELS;
 	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_CLASSIFIER_MODELS;
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS;
@@ -292,6 +298,7 @@ export const CLASSIFIER_MODELS: {
 	"opencode": OPENCODE_CLASSIFIER_MODELS,
 	"opencode-go": OPENCODE_GO_CLASSIFIER_MODELS,
 	"openrouter": OPENROUTER_CLASSIFIER_MODELS,
+	"pioneer": PIONEER_CLASSIFIER_MODELS,
 	"qwen-token-plan": QWEN_TOKEN_PLAN_CLASSIFIER_MODELS,
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS,

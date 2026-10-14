@@ -754,6 +754,11 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 			}
 		}
 		if (this.shouldDeferViewportInputToOverlay()) return undefined;
+		// Independent panes can claim navigation before it scrolls the primary transcript.
+		const focused = this.getFocusedComponent() as
+			| (Component & { handleViewportKey?: (data: string) => boolean })
+			| null;
+		if (!isRelease && focused?.handleViewportKey?.(data)) return { consume: true };
 		if (keybindings.matches(data, "tui.altScreen.pageUp")) {
 			if (!isRelease) {
 				this.scrollBy(-Math.max(1, this.getPrimaryScrollView().viewportHeight - PAGE_SCROLL_OVERLAP));

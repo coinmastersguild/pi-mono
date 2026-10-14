@@ -23,6 +23,7 @@ function runEntry(entry: string, experimental: boolean) {
 			"--import",
 			sourceResolverUrl,
 			resolve(__dirname, "../src", entry),
+			"--unencrypted",
 			"server",
 			"--server-id",
 			"invalid",

@@ -2,7 +2,7 @@ import { ModelThinkingLevelSchema } from "@earendil-works/pi-ai/providers/model-
 import { type Static, type TSchemaOptions, Type } from "typebox";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 
-function nonNegativeSafeInteger(options: { default?: number } = {}) {
+function nonNegativeSafeInteger(options: { default?: number; description?: string } = {}) {
 	return Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER, ...options });
 }
 
@@ -11,11 +11,19 @@ function timeoutSetting(options?: TSchemaOptions) {
 }
 
 const CompactionModelOverrideSchema = Type.Object({
+	maxContextTokens: Type.Optional(nonNegativeSafeInteger()),
 	reserveTokens: Type.Optional(nonNegativeSafeInteger()),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger()),
 });
 
 const CompactionSettingsSchema = Type.Object({
+	maxContextTokens: Type.Optional(
+		nonNegativeSafeInteger({
+			default: SETTINGS_DEFAULTS.compaction.maxContextTokens,
+			description:
+				"Maximum estimated working-context tokens, including system prompt and tools. Zero disables the working-context cap.",
+		}),
+	),
 	enabled: Type.Optional(Type.Boolean({ default: SETTINGS_DEFAULTS.compaction.enabled })),
 	reserveTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.reserveTokens })),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.keepRecentTokens })),

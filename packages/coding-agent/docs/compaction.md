@@ -29,10 +29,23 @@ Both use closely related structured formats and track file operations cumulative
 Auto-compaction triggers when:
 
 ```
-contextTokens > contextWindow - reserveTokens
+contextTokens > min(contextWindow, maxContextTokens) - reserveTokens
 ```
 
-By default, `reserveTokens` is 16384 tokens (configurable in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settings.json`). This leaves room for the LLM's response.
+Pioneer defaults to a 32,768-token working budget, with 8,192 tokens reserved,
+so automatic compaction starts above roughly 24,576 tokens on larger models.
+Settings live in the agent directory's `settings.json` or project settings.
+Setting `maxContextTokens` to `0` uses the model's context window for the trigger.
+
+A final request check includes the effective system prompt, tool declarations,
+and context supplied by extensions. If estimated working context still exceeds
+the cap after compaction, Pioneer stops before the provider request instead of
+silently dropping messages or issuing an oversized request. The cap remains
+active when automatic compaction is disabled. Token counts use estimates, not a
+provider-specific tokenizer; actual provider accounting can differ. Summary
+requests process old history separately and use the selected model's limits.
+Raw session history remains available, and active goals inject their current
+objective, progress, and evidence after compaction.
 
 During a multi-turn agent run, Pi checks the canonical projected context after tools finish and their results are appended, before starting the next assistant response. If the threshold is crossed, Pi compacts during `prepareNextTurn`, then performs the existing catch-up steering poll before `turn_start`. It skips this between-turn check when the completed tool batch terminates the run and no queued message requires another response. Pi also checks before a new user prompt and performs final-attempt overflow recovery after the low-level run ends.
 
@@ -42,7 +55,7 @@ You can also trigger manually with `/compact [instructions]`, where optional ins
 
 ### How It Works
 
-1. **Find cut point**: Walk backwards through the finalized session projection, accumulating token estimates until `keepRecentTokens` (default 20k, configurable in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settings.json`) is reached
+1. **Find cut point**: Walk backwards through the finalized session projection, accumulating token estimates until `keepRecentTokens` (default 8,192) is reached
 2. **Extract messages**: Collect projected messages from the previous kept boundary (or session start) up to the cut point
 3. **Generate summary**: Call LLM to summarize with structured format, passing the previous summary as iterative context when present
 4. **Append entry**: Save `CompactionEntry` with summary and `firstKeptEntryId`
@@ -422,8 +435,9 @@ Configure compaction in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settin
 {
   "compaction": {
     "enabled": true,
-    "reserveTokens": 16384,
-    "keepRecentTokens": 20000
+    "maxContextTokens": 32768,
+    "reserveTokens": 8192,
+    "keepRecentTokens": 8192
   }
 }
 ```
@@ -431,8 +445,9 @@ Configure compaction in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settin
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `enabled` | `true` | Enable auto-compaction |
-| `reserveTokens` | `16384` | Tokens to reserve for LLM response |
-| `keepRecentTokens` | `20000` | Recent tokens to keep (not summarized) |
+| `maxContextTokens` | `32768` | Maximum estimated working context; `0` disables the cap |
+| `reserveTokens` | `8192` | Tokens to reserve for LLM response |
+| `keepRecentTokens` | `8192` | Recent tokens to keep (not summarized) |
 
 Disable auto-compaction with `"enabled": false`. You can still compact manually with `/compact`.
 
@@ -447,6 +462,7 @@ Use `compaction.modelOverrides` to tune token budgets for different models:
     "keepRecentTokens": 20000,
     "modelOverrides": {
       "some-provider/big-model": {
+        "maxContextTokens": 1000000,
         "reserveTokens": 400000
       }
     }
@@ -454,7 +470,7 @@ Use `compaction.modelOverrides` to tune token budgets for different models:
 }
 ```
 
-For a model with a 1M context window, this override triggers compaction above 600K tokens and keeps the ordinary 20000 recent tokens. Other models retain the ordinary 16384-token reserve. `reserveTokens` also influences summarization output limits, capped by the model's maximum output tokens; it is not solely a trigger threshold.
+For a model with a 1M context window, this explicit larger budget triggers compaction above 600K tokens and keeps the ordinary 20000 recent tokens. Other models use the default working-context cap and the ordinary 16384-token reserve in this example. `reserveTokens` also influences summarization output limits, capped by the model's maximum output tokens; it is not solely a trigger threshold.
 
 Keys are exact, case-sensitive `provider/modelId` values, including any slashes within the model ID. Each `reserveTokens` and `keepRecentTokens` value falls back independently from the model override to the ordinary setting to the built-in default. Values must be non-negative safe integers. Invalid values in the matching model override produce an error when read; only omitted fields fall back to the ordinary setting. Model override entries must be objects. Invalid ordinary token settings produce an error when read, even if the active model has a valid override. Only omitted ordinary values use built-in defaults. `enabled` remains global, not model-specific.
 

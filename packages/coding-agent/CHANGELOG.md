@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Pioneer Office presence, a durable local inbox, and explicit task acceptance through `/office` when an Office MCP server is configured.
+- Added opt-in Pioneer Analytic decision support for tool discovery, session and code-context retrieval, guild guidance, code-review triage, and pre-execution guardrails.
+
 ### Breaking Changes
 
 - Moved the published theme JSON Schema to `schemas/theme.schema.json` and made theme loading reject unknown top-level properties and unknown properties under `colors` or `export`. Update existing theme `$schema` references to the new path, define reusable custom colors under `vars`, and remove unsupported metadata.

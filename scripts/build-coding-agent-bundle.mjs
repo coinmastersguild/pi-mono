@@ -111,12 +111,14 @@ function commonBuildOptions() {
 function validateExternalImports(metafiles) {
 	const unexpected = new Set();
 	for (const metafile of metafiles) {
-		for (const input of Object.values(metafile.inputs)) {
+		for (const [inputPath, input] of Object.entries(metafile.inputs)) {
 			for (const imported of input.imports) {
+				// esbuild's injected helper is not a package import or an npm dependency.
+				if (imported.path === "<runtime>" && imported.kind === "import-statement") continue;
 				if (!imported.external || isBuiltin(imported.path) || allowedExternalPackages.has(imported.path)) {
 					continue;
 				}
-				unexpected.add(imported.path);
+				unexpected.add(`${imported.path} (from ${inputPath}, ${imported.kind})`);
 			}
 		}
 	}

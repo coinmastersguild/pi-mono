@@ -78,6 +78,8 @@ import {
 import { formatCacheWarmingStatus, formatCacheWarmingUsage } from "../../core/cache-warmer.ts";
 import { findExtensionStackMatches, recordCrash, takeUnnotifiedCrash } from "../../core/crash-log.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "../../core/defaults.ts";
+import { createDialogueWorker } from "../../core/dialogue/agent-worker.ts";
+import { type DialogueEntry, DialogueLoop, type DialogueMode } from "../../core/dialogue/loop.ts";
 import type {
 	AutocompleteProviderFactory,
 	EditorFactory,
@@ -143,6 +145,7 @@ import { CompactionSummaryMessageComponent } from "./components/compaction-summa
 import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomEntryComponent } from "./components/custom-entry.ts";
 import { CustomMessageComponent } from "./components/custom-message.ts";
+import { type DialogueTab, DialogueTabs } from "./components/dialogue-tabs.ts";
 import { DynamicBorder } from "./components/dynamic-border.ts";
 import { EarendilAnnouncementComponent } from "./components/earendil-announcement.ts";
 import { playArmin3d, playPiLogo3d } from "./components/easter-egg-3d.lazy.ts";
@@ -202,6 +205,7 @@ import {
 } from "./theme/theme.ts";
 import { InteractiveThemeController } from "./theme/theme-controller.ts";
 import { createInteractiveTui, createInteractiveTuiReference } from "./tui-renderer.ts";
+import { WorkspacePanel } from "./workspace-panel.ts";
 
 export { createInteractiveTui, createInteractiveTuiReference } from "./tui-renderer.ts";
 
@@ -455,9 +459,29 @@ export class InteractiveMode {
 	private mainScreenRenderState: TuiMainScreenRenderState | undefined;
 	private loadedResourcesContainer: Container;
 	private chatContainer: Container;
+	private conversationContainer = new Container();
+	private dialogueTabs: DialogueTabs;
+	private dialogueLoop?: DialogueLoop;
+	private dialogueSession?: AgentSession;
+	private dialogueMode: DialogueMode = "auto";
+	private startupBusy = true;
+	private dialogueNavigation: Component = {
+		render: (width) => {
+			const tabs = this.dialogueTabs;
+			const conversation = `Conversation${tabs.unread ? ` (${tabs.unread} new)` : ""}`;
+			const label = tabs.selected === "conversation" ? `[${conversation}]  Thinking` : `${conversation}  [Thinking]`;
+			return new Text(
+				`${theme.fg("accent", label)}  ${keyText("app.dialogue.toggle")}\n${theme.fg("dim", `${tabs.selected === "thinking" ? "work" : this.dialogueMode} · ${this.dialogueLoop?.status ?? "Starting dialogue..."}`)}`,
+				1,
+				0,
+			).render(width);
+		},
+		invalidate() {},
+	};
 	private documentContainer: Container;
 	private transcriptScrollView: TuiLayouts.ScrollView | undefined;
 	private fullscreenLayoutRoot: Component | undefined;
+	private workspacePanel: WorkspacePanel | undefined;
 	private pendingMessagesContainer: Container;
 	private statusContainer: Container;
 	private defaultEditor: CustomEditor;
@@ -612,6 +636,8 @@ export class InteractiveMode {
 		this.options = { ...options, tuiMode };
 		this.autoTrustOnReloadCwd = options.autoTrustOnReloadCwd;
 		this.runtimeHost.setBeforeSessionInvalidate(() => {
+			this.dialogueLoop?.dispose();
+			this.dialogueLoop = undefined;
 			this.resetExtensionUI();
 		});
 		this.runtimeHost.setRebindSession(async () => {
@@ -633,10 +659,11 @@ export class InteractiveMode {
 		this.headerContainer = new Container();
 		this.loadedResourcesContainer = new Container();
 		this.chatContainer = new Container();
+		this.dialogueTabs = new DialogueTabs(this.conversationContainer, this.chatContainer);
 		this.documentContainer = new Container();
 		this.documentContainer.addChild(this.headerContainer);
 		this.documentContainer.addChild(this.loadedResourcesContainer);
-		this.documentContainer.addChild(this.chatContainer);
+		this.documentContainer.addChild(this.dialogueTabs);
 		this.pendingMessagesContainer = new Container();
 		this.statusContainer = new Container();
 		this.widgetContainerAbove = new Container();
@@ -965,8 +992,24 @@ export class InteractiveMode {
 
 		// Keep one component tree and remount it when changing renderers.
 		this.renderWidgets(); // Initialize with default spacer
+		this.workspacePanel = new WorkspacePanel(
+			this.sessionManager.getCwd(),
+			this.keybindings,
+			() => this.ui.requestRender(),
+			() => this.ui.setFocus(this.editor),
+			async (signal) => (await this.session.modelRuntime.getAuth("pioneer", { signal }))?.auth.apiKey,
+		);
 		const viewport = createChatViewport({
+			sidebar: this.workspacePanel,
+			sidebarEnabled: () => this.workspacePanel?.enabled ?? false,
+			sidebarViewport: (width, height) => {
+				if (!this.workspacePanel) return;
+				this.workspacePanel.width = width;
+				this.workspacePanel.height = height;
+				if (!width && this.workspacePanel.focused) this.ui.setFocus(this.editor);
+			},
 			document: this.documentContainer,
+			navigation: this.dialogueNavigation,
 			pendingMessages: this.pendingMessagesContainer,
 			status: this.statusContainer,
 			widgetsAbove: this.widgetContainerAbove,
@@ -984,6 +1027,7 @@ export class InteractiveMode {
 			this.pendingMessagesContainer,
 			this.statusContainer,
 			this.widgetContainerAbove,
+			this.dialogueNavigation,
 			this.editorContainer,
 			this.widgetContainerBelow,
 			this.footerContainer,
@@ -997,6 +1041,7 @@ export class InteractiveMode {
 		// Start the UI before initializing extensions so session_start handlers can use interactive dialogs
 		this.ui.start();
 		this.isInitialized = true;
+		this.workspacePanel.monitor.start();
 		this.programStatus.report();
 		this.ensurePngTranscoder();
 
@@ -1248,6 +1293,7 @@ export class InteractiveMode {
 			}
 		}
 
+		this.startupBusy = false;
 		// Main interactive loop
 		while (true) {
 			const userInput = await this.getUserInput();
@@ -1979,6 +2025,7 @@ export class InteractiveMode {
 			commandContextActions: {
 				waitForIdle: () => this.session.waitForIdle(),
 				newSession: async (options) => {
+					if (!this.canNavigateDialogue()) return { cancelled: true };
 					this.clearStatusIndicator();
 					try {
 						return await this.runtimeHost.newSession(options);
@@ -1987,6 +2034,7 @@ export class InteractiveMode {
 					}
 				},
 				fork: async (entryId, options) => {
+					if (!this.canNavigateDialogue()) return { cancelled: true };
 					try {
 						const result = await this.runtimeHost.fork(entryId, options);
 						if (!result.cancelled) {
@@ -1999,6 +2047,7 @@ export class InteractiveMode {
 					}
 				},
 				navigateTree: async (targetId, options) => {
+					if (!this.canNavigateDialogue()) return { cancelled: true };
 					const result = await this.session.navigateTree(targetId, {
 						summarize: options?.summarize,
 						customInstructions: options?.customInstructions,
@@ -2069,6 +2118,7 @@ export class InteractiveMode {
 		this.footer.setSession(this.session);
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerDataProvider.setCwd(this.sessionManager.getCwd());
+		this.workspacePanel?.setCwd(this.sessionManager.getCwd());
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
 		this.outputPad = this.settingsManager.getOutputPad();
 		this.ui.setShowHardwareCursor(this.settingsManager.getShowHardwareCursor());
@@ -3065,10 +3115,20 @@ export class InteractiveMode {
 	// =========================================================================
 
 	private setupKeyHandlers(): void {
+		this.defaultEditor.onAction("app.workspace.toggle", () => {
+			if (this.workspacePanel) this.workspacePanel.enabled = !this.workspacePanel.enabled;
+			this.ui.requestRender();
+		});
+		this.defaultEditor.onAction("app.workspace.focus", () => {
+			if (this.renderer.mode === "fullscreen" && this.workspacePanel?.enabled && this.workspacePanel.width)
+				this.ui.setFocus(this.workspacePanel);
+		});
 		// Set up handlers on defaultEditor - they use this.editor for text access
 		// so they work correctly regardless of which editor is active
 		this.defaultEditor.onEscape = () => {
-			if (this.session.isStreaming) {
+			if (this.dialogueLoop?.state.active) {
+				this.dialogueLoop.cancel();
+			} else if (this.session.isStreaming) {
 				this.restoreQueuedMessagesToEditor({ abort: true });
 			} else if (this.session.isBashRunning) {
 				this.session.abortBash();
@@ -3096,6 +3156,9 @@ export class InteractiveMode {
 		};
 
 		// Register app action handlers
+		this.defaultEditor.onAction("app.dialogue.toggle", () =>
+			this.selectDialogueTab(this.dialogueTabs.selected === "conversation" ? "thinking" : "conversation"),
+		);
 		this.defaultEditor.onAction("app.clear", () => this.handleCtrlC());
 		this.defaultEditor.onCtrlD = () => this.handleCtrlD();
 		this.defaultEditor.onAction("app.suspend", () => this.handleCtrlZ());
@@ -3196,12 +3259,165 @@ export class InteractiveMode {
 		this.showStatus("Startup is still in progress");
 	}
 
+	private selectDialogueTab(tab: DialogueTab): void {
+		if (this.dialogueTabs.selected === tab) return;
+		const draft = this.editor.getExpandedText?.() ?? this.editor.getText();
+		this.editor.setText(this.dialogueTabs.select(tab, draft));
+		if (this.renderer instanceof TuiAltScreen) this.renderer.resetTextSelection();
+		this.transcriptScrollView?.scrollToEnd();
+		this.isBashMode = this.editor.getText().trimStart().startsWith("!");
+		this.updateEditorBorderColor();
+		this.ui.requestRender();
+	}
+
+	private recordDialogue(entry: DialogueEntry, persist = true): void {
+		const bounded = { ...entry, text: entry.text.slice(0, 32_768) };
+		if (persist) {
+			try {
+				this.sessionManager.appendCustomEntry("pioneer.dialogue.v1", bounded);
+			} catch {
+				this.conversationContainer.addChild(
+					new Text("Dialogue history could not be saved to the session file.", 1, 0),
+				);
+			}
+		}
+		this.conversationContainer.addChild(new Spacer(1));
+		if (bounded.role === "user") {
+			this.conversationContainer.addChild(new UserMessageComponent(bounded.text, getMarkdownTheme()));
+		} else if (bounded.role === "assistant") {
+			this.conversationContainer.addChild(new Markdown(bounded.text, 1, 0, getMarkdownTheme()));
+		} else {
+			this.conversationContainer.addChild(new Text(theme.fg("dim", bounded.text), 1, 0));
+		}
+		// Keep the live terminal transcript bounded; complete history remains in the session file.
+		if (this.conversationContainer.children.length > 800) this.conversationContainer.children.splice(0, 2);
+		if (persist && bounded.role !== "user") this.dialogueTabs.notify();
+		this.ui.requestRender();
+	}
+
+	private resetDialogue(): void {
+		this.dialogueLoop?.dispose();
+		if (this.dialogueSession && this.dialogueSession !== this.session) {
+			this.dialogueTabs.reset();
+			this.editor.setText("");
+		}
+		this.dialogueSession = this.session;
+		this.conversationContainer.clear();
+		this.recordDialogue(
+			{
+				role: "status",
+				text: `Conversation stays responsive while Thinking works. ${keyText("app.dialogue.toggle")} switches tabs. Type help for controls. Auto mode sends unmatched messages to Thinking; /dialog chat keeps them local. Pending jobs are not restored after exit or session changes.`,
+			},
+			false,
+		);
+		for (const entry of this.sessionManager.getBranch().slice(-800)) {
+			if (entry.type !== "custom" || entry.customType !== "pioneer.dialogue.v1") continue;
+			const data = entry.data;
+			if (
+				typeof data !== "object" ||
+				!data ||
+				!("text" in data) ||
+				typeof data.text !== "string" ||
+				!("role" in data)
+			)
+				continue;
+			if (data.role === "user" || data.role === "assistant" || data.role === "status")
+				this.recordDialogue({ role: data.role, text: data.text }, false);
+		}
+		const session = this.session;
+		this.dialogueLoop = new DialogueLoop(
+			createDialogueWorker(session, () => this.startupBusy || this.isShuttingDown || this.session !== session),
+			(entry) => {
+				if (this.session === session) this.recordDialogue(entry);
+			},
+			() => this.ui.requestRender(),
+		);
+	}
+
+	private canNavigateDialogue(): boolean {
+		if (this.dialogueLoop?.state.active || this.dialogueLoop?.state.queued) {
+			this.showWarning(
+				"Finish background work before changing sessions. Use /cancel, then /drop-queue to discard pending jobs; wait for the active run to stop.",
+			);
+			return false;
+		}
+		return true;
+	}
+
+	private handleDialogueInput(text: string): boolean {
+		const loop = this.dialogueLoop;
+		if (!loop) return false;
+		const split = text.indexOf(" ");
+		const command = split < 0 ? text : text.slice(0, split);
+		const argument = split < 0 ? "" : text.slice(split + 1).trim();
+		const commands = [
+			"/chat",
+			"/think",
+			"/dialog",
+			"/work",
+			"/queue",
+			"/interrupt",
+			"/cancel",
+			"/pending",
+			"/resume-work",
+			"/drop-queue",
+		];
+		if (text.startsWith("/") && !commands.includes(command)) return false;
+		if (text.startsWith("!")) return false;
+		this.editor.addToHistory?.(text);
+		this.editor.setText("");
+		if (command === "/chat") {
+			this.selectDialogueTab("conversation");
+			if (argument) loop.submit(argument, "chat");
+		} else if (command === "/think") {
+			this.selectDialogueTab("thinking");
+		} else if (command === "/dialog") {
+			if (argument === "auto" || argument === "chat") {
+				this.dialogueMode = argument;
+				this.recordDialogue({ role: "status", text: `Conversation routing: ${argument}.` });
+			} else this.recordDialogue({ role: "status", text: "Usage: /dialog auto|chat" });
+		} else if (command === "/work" || command === "/queue") {
+			if (argument) {
+				this.flushPendingBashComponents();
+				loop.submit(argument, "work");
+			} else this.recordDialogue({ role: "status", text: `Usage: ${command} <task>` });
+		} else if (command === "/interrupt" || command === "/cancel") {
+			const externalRun = !loop.state.active && (this.session.isStreaming || this.session.isCompacting);
+			const accepted = loop.interrupt(command === "/interrupt" ? argument : undefined);
+			// Never abort a replacement that just started while previously idle.
+			if (accepted && externalRun) {
+				this.session.abortCompaction();
+				void this.session.abort();
+			}
+		} else if (command === "/pending") loop.pending();
+		else if (command === "/resume-work") loop.resume();
+		else if (command === "/drop-queue") loop.dropQueue();
+		else {
+			this.flushPendingBashComponents();
+			loop.submit(text, this.dialogueTabs.selected === "thinking" ? "work" : this.dialogueMode);
+		}
+		this.ui.requestRender();
+		return true;
+	}
+
 	private setupEditorSubmitHandler(): void {
 		this.defaultEditor.onSubmit = async (text: string) => {
 			text = text.trim();
 			if (!text) return;
+			if (this.handleDialogueInput(text)) return;
+			if (!text.startsWith("/files")) this.selectDialogueTab("thinking");
 
 			// Handle commands
+			if (text === "/files" || text.startsWith("/files ")) {
+				this.editor.setText("");
+				const error = this.workspacePanel?.command(text.slice(6).trim());
+				if (error) this.showStatus(error);
+				else if (this.renderer.mode !== "fullscreen")
+					this.showStatus("The workspace pane requires fullscreen mode (/settings).");
+				else if (this.ui.terminal.columns < 100)
+					this.showStatus("Widen the terminal to at least 100 columns for the workspace pane.");
+				return;
+			}
 			if (text === "/settings") {
 				this.showSettingsSelector();
 				this.editor.setText("");
@@ -3413,6 +3629,7 @@ export class InteractiveMode {
 
 		switch (event.type) {
 			case "agent_start":
+				if (this.workspacePanel) this.workspacePanel.monitor.agentActive = true;
 				this.pendingTools.clear();
 				// Restore main escape handler if retry handler is still active
 				// (retry success event fires later, but we need main handler now)
@@ -3640,6 +3857,7 @@ export class InteractiveMode {
 			}
 
 			case "tool_execution_end": {
+				void this.workspacePanel?.monitor.refresh();
 				if (event.isError) this.maybeShowInstallChangeWarning();
 				const component = this.pendingTools.get(event.toolCallId);
 				if (component) {
@@ -3651,6 +3869,10 @@ export class InteractiveMode {
 			}
 
 			case "agent_end":
+				if (this.workspacePanel) {
+					this.workspacePanel.monitor.agentActive = false;
+					void this.workspacePanel.monitor.refresh();
+				}
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}
@@ -3666,6 +3888,16 @@ export class InteractiveMode {
 				break;
 
 			case "agent_settled":
+				if (!event.aborted && !this.dialogueLoop?.state.active) {
+					const last = this.session.messages.findLast((message) => message.role === "assistant");
+					if (last?.role === "assistant" && (last.stopReason === "stop" || last.stopReason === "length")) {
+						const text = last.content
+							.filter((part) => part.type === "text")
+							.map((part) => part.text)
+							.join("\n");
+						if (text) this.recordDialogue({ role: "assistant", text: `Thinking responded:\n\n${text}` });
+					}
+				}
 				await this.checkShutdownRequested();
 				break;
 
@@ -3676,6 +3908,7 @@ export class InteractiveMode {
 				// Keep editor active; submissions are queued during compaction.
 				this.autoCompactionEscapeHandler = this.defaultEditor.onEscape;
 				this.defaultEditor.onEscape = () => {
+					this.dialogueLoop?.cancel();
 					this.session.abortCompaction();
 				};
 				this.showStatusIndicator(new CompactionStatusIndicator(this.ui, event.reason));
@@ -3739,6 +3972,7 @@ export class InteractiveMode {
 				// Set up escape to abort retry
 				this.retryEscapeHandler = this.defaultEditor.onEscape;
 				this.defaultEditor.onEscape = () => {
+					this.dialogueLoop?.cancel();
 					this.session.abortRetry();
 				};
 				this.showStatusIndicator(
@@ -4206,6 +4440,7 @@ export class InteractiveMode {
 	}
 
 	renderInitialMessages(): void {
+		this.resetDialogue();
 		const entries = this.sessionManager.buildContextEntries();
 		this.renderSessionEntries(entries, {
 			updateFooter: true,
@@ -4291,6 +4526,7 @@ export class InteractiveMode {
 	private async shutdown(options?: { fromSignal?: boolean }): Promise<void> {
 		if (this.isShuttingDown) return;
 		this.isShuttingDown = true;
+		this.dialogueLoop?.dispose();
 		// Keep signal handlers registered until terminal cleanup has completed.
 		// `signal-exit` checks the listener list during the same SIGTERM/SIGHUP
 		// dispatch and re-sends the signal if only its own listeners remain.
@@ -4475,6 +4711,12 @@ export class InteractiveMode {
 	private async handleFollowUp(): Promise<void> {
 		const text = (this.editor.getExpandedText?.() ?? this.editor.getText()).trim();
 		if (!text) return;
+		if (!text.startsWith("/") && !text.startsWith("!") && this.dialogueLoop) {
+			this.editor.addToHistory?.(text);
+			this.editor.setText("");
+			this.dialogueLoop.submit(text, "work");
+			return;
+		}
 
 		// Queue input during compaction (extension commands execute immediately)
 		if (this.session.isCompacting) {
@@ -4505,6 +4747,14 @@ export class InteractiveMode {
 	}
 
 	private handleDequeue(): void {
+		const pending = this.dialogueLoop?.takeQueued() ?? [];
+		if (pending.length) {
+			const draft = this.editor.getExpandedText?.() ?? this.editor.getText();
+			this.editor.setText([...pending, draft].filter(Boolean).join("\n\n"));
+			this.recordDialogue({ role: "status", text: `Restored ${pending.length} queued jobs to the editor.` });
+			return;
+		}
+
 		const restored = this.restoreQueuedMessagesToEditor();
 		if (restored === 0) {
 			this.showStatus("No queued messages to restore");
@@ -4621,12 +4871,16 @@ export class InteractiveMode {
 	}
 
 	showError(errorMessage: string): void {
+		if (this.dialogueTabs.selected === "conversation")
+			this.recordDialogue({ role: "status", text: `Error: ${errorMessage}` }, false);
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new ThemedText(() => theme.fg("error", `Error: ${errorMessage}`), this.outputPad, 0));
 		this.ui.requestRender();
 	}
 
 	showWarning(warningMessage: string): void {
+		if (this.dialogueTabs.selected === "conversation")
+			this.recordDialogue({ role: "status", text: `Warning: ${warningMessage}` }, false);
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new ThemedText(() => theme.fg("warning", `Warning: ${warningMessage}`), 1, 0));
 		this.ui.requestRender();
@@ -5498,6 +5752,7 @@ export class InteractiveMode {
 	}
 
 	private showUserMessageSelector(): void {
+		if (!this.canNavigateDialogue()) return;
 		const userMessages = this.session.getUserMessagesForForking();
 
 		if (userMessages.length === 0) {
@@ -5536,6 +5791,7 @@ export class InteractiveMode {
 	}
 
 	private async handleCloneCommand(): Promise<void> {
+		if (!this.canNavigateDialogue()) return;
 		const leafId = this.sessionManager.getLeafId();
 		if (!leafId) {
 			this.showStatus("Nothing to clone yet");
@@ -5557,6 +5813,7 @@ export class InteractiveMode {
 	}
 
 	private showTreeSelector(initialSelectedId?: string): void {
+		if (!this.canNavigateDialogue()) return;
 		const tree = this.sessionManager.getTree();
 		const realLeafId = this.sessionManager.getLeafId();
 		const initialFilterMode = this.settingsManager.getTreeFilterMode();
@@ -5706,6 +5963,7 @@ export class InteractiveMode {
 	}
 
 	private showSessionSelector(): void {
+		if (!this.canNavigateDialogue()) return;
 		this.showSelector((done) => {
 			const selector = new SessionSelectorComponent(
 				(onProgress, signal) =>
@@ -5752,6 +6010,7 @@ export class InteractiveMode {
 		sessionPath: string,
 		options?: Parameters<ExtensionCommandContext["switchSession"]>[1],
 	): Promise<{ cancelled: boolean }> {
+		if (!this.canNavigateDialogue()) return { cancelled: true };
 		this.clearStatusIndicator();
 		try {
 			const result = await this.runtimeHost.switchSession(sessionPath, {
@@ -6428,6 +6687,7 @@ export class InteractiveMode {
 	// =========================================================================
 
 	private async handleReloadCommand(): Promise<void> {
+		if (!this.canNavigateDialogue()) return;
 		if (this.session.isStreaming) {
 			this.showWarning("Wait for the current response to finish before reloading.");
 			return;
@@ -6565,6 +6825,7 @@ export class InteractiveMode {
 	}
 
 	private async handleImportCommand(text: string): Promise<void> {
+		if (!this.canNavigateDialogue()) return;
 		const inputPath = this.getPathCommandArgument(text, "/import");
 		if (!inputPath) {
 			this.showError("Usage: /import <path.jsonl>");
@@ -6924,6 +7185,7 @@ export class InteractiveMode {
 	}
 
 	private async handleClearCommand(): Promise<void> {
+		if (!this.canNavigateDialogue()) return;
 		this.clearStatusIndicator();
 		try {
 			const result = await this.runtimeHost.newSession();
@@ -7078,6 +7340,7 @@ export class InteractiveMode {
 	}
 
 	private async handleCompactCommand(customInstructions?: string): Promise<void> {
+		if (!this.canNavigateDialogue()) return;
 		this.clearStatusIndicator();
 
 		try {
@@ -7088,6 +7351,8 @@ export class InteractiveMode {
 	}
 
 	stop(fullscreenExitOutput = this.settingsManager.getFullscreenExitOutput()): void {
+		this.dialogueLoop?.dispose();
+		this.workspacePanel?.dispose();
 		this.disposeActiveSelector();
 		if (this.settingsManager.getShowTerminalProgress()) {
 			this.ui.terminal.setProgress(false);

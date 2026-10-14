@@ -5,6 +5,28 @@ description: Prepare, publish, verify, and recover pi releases. Use for release 
 
 # Releasing pi
 
+## Pioneer npm distribution
+
+For `@pioneer-platform/pioneer-cli`, use the separate Pioneer artifact and workflow.
+Do not run the legacy upstream workspace publisher for this package.
+
+1. Run `npm run check` and the relevant offline tests.
+2. Build and pack with `node scripts/pack-pioneer.mjs --out /tmp/pioneer-release-<version>`.
+3. Verify outside the repository with `node scripts/check-pioneer-install.mjs /tmp/pioneer-release-<version>`.
+   This verifies tarball integrity, SDK exports, codemode, and goal execution with
+   local fake providers, including an actual project file write/read.
+   Verify the minimum Node engine as well. Use `--live` for the intended default
+   Pioneer provider prompt; it uses environment/repository credentials without printing them.
+4. Review `docs/pioneer-release-1.1.0.md` and the packaged privacy documentation.
+5. The owner must register `.github/workflows/publish-pioneer.yml`, environment
+   `pioneer-npm-publish`, as an npm trusted publisher for the existing package.
+6. After the source release is committed and publication is authorized, a
+   `pioneer-v<version>` tag triggers the dedicated workflow. It publishes only
+   the Pioneer artifact. Existing npm versions cannot be replaced; use a new version.
+   Manual workflow runs must select the matching `pioneer-v<version>` tag too.
+
+## Upstream workspace release
+
 Run repository commands from the repo root (two directories above this skill), unless instructed otherwise.
 
 **Lockstep versioning**: all packages share one version; every release updates all together. `patch` = fixes + additions, `minor` = breaking changes. No major releases.

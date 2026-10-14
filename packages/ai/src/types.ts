@@ -85,6 +85,7 @@ export type KnownClassifierApi =
 export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
+	| "pioneer"
 	| "amazon-bedrock"
 	| "ant-ling"
 	| "anthropic"

@@ -33,6 +33,7 @@ import {
 	type SessionProjection,
 	sessionEntryToContextMessages,
 } from "../session-manager.ts";
+import { SETTINGS_DEFAULTS } from "../settings-defaults.ts";
 import { combineUsage } from "../usage-totals.ts";
 import {
 	computeFileLists,
@@ -119,14 +120,13 @@ export interface CompactionResult<T = unknown> {
 
 export interface CompactionSettings {
 	enabled: boolean;
+	maxContextTokens?: number;
 	reserveTokens: number;
 	keepRecentTokens: number;
 }
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
-	enabled: true,
-	reserveTokens: 16384,
-	keepRecentTokens: 20000,
+	...SETTINGS_DEFAULTS.compaction,
 };
 
 // ============================================================================
@@ -266,7 +266,18 @@ export function estimateProjectedContextTokens(
  */
 export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
 	if (!settings.enabled) return false;
-	return contextTokens > contextWindow - settings.reserveTokens;
+	const limit = settings.maxContextTokens ?? SETTINGS_DEFAULTS.compaction.maxContextTokens;
+	const window = limit > 0 ? Math.min(contextWindow, limit) : contextWindow;
+	return contextTokens > window - settings.reserveTokens;
+}
+
+/** Estimate the actual prompt state and conversation, without counting superseded system patches twice. */
+export function estimateRequestTokens(messages: AgentMessage[]): number {
+	const system = getCurrentSystemMessage(messages);
+	return (
+		(system ? estimateTokens(system) : 0) +
+		messages.reduce((total, message) => total + (message.role === "system" ? 0 : estimateTokens(message)), 0)
+	);
 }
 
 // ============================================================================

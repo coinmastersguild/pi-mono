@@ -30,6 +30,7 @@ This table covers providers with a single primary API-key variable. Providers th
 
 | Provider | Environment variable |
 |---|---|
+| Pioneer Alpha (GLM) | `PIONEER_API_KEY` |
 | Anthropic | `ANTHROPIC_API_KEY` |
 | Ant Ling | `ANT_LING_API_KEY` |
 | OpenAI | `OPENAI_API_KEY` |

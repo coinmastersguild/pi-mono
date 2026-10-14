@@ -17,6 +17,21 @@ export interface BuiltinSlashCommand {
 }
 
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+	{ name: "chat", description: "Open Conversation; optional text forces a local scripted reply" },
+	{ name: "think", description: "Open the Thinking transcript" },
+	{ name: "dialog", description: "Conversation routing: auto or chat" },
+	{ name: "work", description: "Send a task to Thinking (FIFO if busy)" },
+	{ name: "queue", description: "Queue background work; starts immediately if idle" },
+	{ name: "interrupt", description: "Stop current work; optional replacement runs next" },
+	{ name: "cancel", description: "Stop current work and pause pending jobs" },
+	{ name: "pending", description: "List pending background jobs" },
+	{ name: "resume-work", description: "Resume the paused background queue" },
+	{ name: "drop-queue", description: "Discard pending jobs" },
+	{
+		name: "files",
+		description: "Live filesystem and quality feed",
+		argumentHint: "[on|off|all|changes|hidden|ignored|quality|refresh|core|alpha|local]",
+	},
 	{ name: "settings", description: "Open settings menu" },
 	{ name: "model", description: "Select model (opens selector UI)", argumentHint: "<provider/model>" },
 	{ name: "tree", description: "Navigate session tree (switch branches)" },

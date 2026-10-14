@@ -1,0 +1,79 @@
+name: Publish Pioneer CLI
+on:
+  workflow_dispatch:
+  push:
+    tags: ['pioneer-v*']
+permissions:
+  contents: read
+concurrency:
+  group: pioneer-npm-publish
+  cancel-in-progress: false
+jobs:
+  native-privacy:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.19.0'
+      - run: npm ci --ignore-scripts
+      - name: Native macOS encrypted vault
+        working-directory: packages/coding-agent
+        env:
+          PI_TEST_NATIVE_VAULT: '1'
+        run: node ../../node_modules/vitest/dist/cli.js --run test/privacy-macos.test.ts
+  publish:
+    needs: native-privacy
+    runs-on: ubuntu-latest
+    environment: pioneer-npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+      - run: npm ci --ignore-scripts
+      - run: npm run hydrate:model-data
+      - run: npm run check
+      - name: Pioneer regression tests
+        working-directory: packages/coding-agent
+        run: >-
+          node ../../node_modules/vitest/dist/cli.js --run
+          test/pioneer-login.test.ts test/pioneer-core.test.ts
+          test/pioneer-analytic.test.ts test/pioneer-office.test.ts
+          test/pioneer-projects.test.ts test/privacy.test.ts
+          test/privacy-onboarding.test.ts test/workspace-monitor.test.ts
+          test/workspace-diff.test.ts test/chat-viewport.test.ts
+          test/dialogue-loop.test.ts test/dialogue-tabs.test.ts
+          test/suite/dialogue-worker.test.ts test/suite/dialogue-interactive.test.ts
+          test/suite/file-io.test.ts
+          test/suite/pioneer-goal.test.ts test/suite/pioneer-integrations.test.ts
+          test/suite/context-budget.test.ts test/settings-manager-compaction.test.ts
+          test/suite/agent-session-compaction.test.ts
+          test/suite/agent-session-compaction-model-overrides.test.ts
+      - name: Agent cancellation tests
+        working-directory: packages/agent
+        run: node ../../node_modules/vitest/dist/cli.js --run test/agent-loop.test.ts test/agent.test.ts
+      - run: node --test scripts/pioneer-package-manifest.test.mjs scripts/verify-pioneer-artifact.test.mjs
+      - run: node scripts/pack-pioneer.mjs --out .artifacts/pioneer-release
+      - run: node scripts/check-pioneer-install.mjs .artifacts/pioneer-release
+      - name: Minimum supported Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.19.0'
+          registry-url: https://registry.npmjs.org
+      - run: node scripts/check-pioneer-install.mjs .artifacts/pioneer-release
+      - run: npm install -g npm@11.16.0 --ignore-scripts
+      - name: Verify release tag and tarball integrity
+        run: node scripts/verify-pioneer-artifact.mjs .artifacts/pioneer-release
+      - name: Publish Pioneer artifact
+        run: npm publish .artifacts/pioneer-release/*.tgz --access public --provenance --ignore-scripts

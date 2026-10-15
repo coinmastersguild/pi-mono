@@ -127,6 +127,14 @@ describe("interactive dialogue wiring", () => {
 		expect(harness.sessionManager.buildSessionContext().messages).toHaveLength(0);
 	});
 
+	it("shows workspace command diagnostics in Conversation without dispatching work", async () => {
+		const { harness, ui, submit } = await setup();
+		await submit("/files");
+		expect(ui.dialogueTabs.selected).toBe("conversation");
+		expect(ui.conversationContainer.render(100).join("\n")).toContain("workspace pane");
+		expect(getUserTexts(harness)).toEqual([]);
+	});
+
 	it("also forwards successful responses from startup or extension-owned runs", async () => {
 		const { harness, ui } = await setup();
 		harness.setResponses([fauxAssistantMessage("External run result")]);

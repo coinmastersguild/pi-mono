@@ -1,7 +1,7 @@
 # Beast handoff: Pioneer CLI dialogue workspace
 
 Date: 2026-10-14. Release target: `@pioneer-platform/pioneer-cli@1.1.1`.
-Branch: `alpha/027-dialogue-workspace` in `coinmastersguild/pi-mono`.
+Branch: `agent/027-dialogue-workspace` in `coinmastersguild/pi-mono`, PR into `alpha`.
 
 ## Delivered implementation
 
@@ -105,6 +105,13 @@ Release evidence and final publication status are recorded in the GitHub release
   repository: authored replies during a slow run, F6 switching, unread result
   delivery, and the workspace pane in both views. Source-terminal testing also
   verified queued work and interrupt/replacement ordering.
-- The complete offline monorepo suite is being checked separately. Its initial
-  sandbox run could not bind local HTTP/Unix sockets. Treat the release's final
-  validation record as authoritative for that broader suite.
+- The complete credential-isolated offline monorepo suite passes, including
+  2,921 coding-agent tests. It requires the locked Rust test daemon, `fd` on PATH,
+  and permission to bind local mock HTTP/Unix sockets and watch temporary files.
+- The native macOS encrypted-vault test passes: local Git, encrypted files and
+  memory, wrong-password rejection, reopen, remote-command and outside-write
+  rejection. The test uses a disposable image and never reads existing vaults.
+- Final regression fixes preserve startup/session navigation before dialogue
+  initialization and show workspace diagnostics in Conversation. Updated tests
+  distinguish physical model windows from the default working-context cap and
+  verify that cancellation prevents later provider dispatch or compaction.

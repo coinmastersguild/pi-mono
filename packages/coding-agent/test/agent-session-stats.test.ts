@@ -68,7 +68,8 @@ function createToolResultMessage(usage: Usage): ToolResultMessage {
 }
 
 async function createSession() {
-	const settingsManager = SettingsManager.inMemory();
+	// Exercise the physical model window independently of Pioneer's default working-context cap.
+	const settingsManager = SettingsManager.inMemory({ compaction: { maxContextTokens: 0 } });
 	const sessionManager = SessionManager.inMemory();
 	const authStorage = AuthStorage.inMemory();
 	await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));

@@ -48,7 +48,7 @@ describe("automatic compaction cancellation regressions", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 200, maxTokens: 50 }],
 			settings: {
-				compaction: { enabled: true, reserveTokens: 50, keepRecentTokens: 1 },
+				compaction: { enabled: true, reserveTokens: 50, keepRecentTokens: 1, maxContextTokens: 0 },
 				retry: { enabled: false },
 			},
 			extensionFactories: [
@@ -62,8 +62,10 @@ describe("automatic compaction cancellation regressions", () => {
 		harness.setResponses([
 			fauxAssistantMessage("", { stopReason: "error", errorMessage: "Synthetic network failure" }),
 		]);
+		let compactionsAtAbort: number | undefined;
 		harness.session.subscribe((event) => {
 			if (event.type === "message_end" && event.message.role === "assistant") {
+				compactionsAtAbort = harness.eventsOfType("compaction_start").length;
 				harness.session.abortCompaction();
 				void harness.session.abort();
 			}
@@ -71,7 +73,9 @@ describe("automatic compaction cancellation regressions", () => {
 
 		await harness.session.prompt("z".repeat(1000));
 
-		expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
+		// Pre-request compaction is allowed; no new compaction may start after abort.
+		expect(compactionsAtAbort).toBeDefined();
+		expect(harness.eventsOfType("compaction_start")).toHaveLength(compactionsAtAbort!);
 	});
 
 	// Regression test for #9777.

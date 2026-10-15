@@ -2025,7 +2025,7 @@ export class InteractiveMode {
 			commandContextActions: {
 				waitForIdle: () => this.session.waitForIdle(),
 				newSession: async (options) => {
-					if (!this.canNavigateDialogue()) return { cancelled: true };
+					if (this.dialogueLoop && !this.canNavigateDialogue()) return { cancelled: true };
 					this.clearStatusIndicator();
 					try {
 						return await this.runtimeHost.newSession(options);
@@ -2034,7 +2034,7 @@ export class InteractiveMode {
 					}
 				},
 				fork: async (entryId, options) => {
-					if (!this.canNavigateDialogue()) return { cancelled: true };
+					if (this.dialogueLoop && !this.canNavigateDialogue()) return { cancelled: true };
 					try {
 						const result = await this.runtimeHost.fork(entryId, options);
 						if (!result.cancelled) {
@@ -2047,7 +2047,7 @@ export class InteractiveMode {
 					}
 				},
 				navigateTree: async (targetId, options) => {
-					if (!this.canNavigateDialogue()) return { cancelled: true };
+					if (this.dialogueLoop && !this.canNavigateDialogue()) return { cancelled: true };
 					const result = await this.session.navigateTree(targetId, {
 						summarize: options?.summarize,
 						customInstructions: options?.customInstructions,
@@ -3404,8 +3404,8 @@ export class InteractiveMode {
 		this.defaultEditor.onSubmit = async (text: string) => {
 			text = text.trim();
 			if (!text) return;
-			if (this.handleDialogueInput(text)) return;
-			if (!text.startsWith("/files")) this.selectDialogueTab("thinking");
+			if (this.dialogueLoop && this.handleDialogueInput(text)) return;
+			if (this.dialogueTabs && !text.startsWith("/files")) this.selectDialogueTab("thinking");
 
 			// Handle commands
 			if (text === "/files" || text.startsWith("/files ")) {
@@ -4056,6 +4056,7 @@ export class InteractiveMode {
 	 * we update the previous status line instead of appending new ones to avoid log spam.
 	 */
 	private showStatus(message: string): void {
+		if (this.dialogueTabs?.selected === "conversation") this.recordDialogue({ role: "status", text: message }, false);
 		const children = this.chatContainer.children;
 		const last = children.length > 0 ? children[children.length - 1] : undefined;
 		const secondLast = children.length > 1 ? children[children.length - 2] : undefined;
@@ -4871,7 +4872,7 @@ export class InteractiveMode {
 	}
 
 	showError(errorMessage: string): void {
-		if (this.dialogueTabs.selected === "conversation")
+		if (this.dialogueTabs?.selected === "conversation")
 			this.recordDialogue({ role: "status", text: `Error: ${errorMessage}` }, false);
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new ThemedText(() => theme.fg("error", `Error: ${errorMessage}`), this.outputPad, 0));
@@ -4879,7 +4880,7 @@ export class InteractiveMode {
 	}
 
 	showWarning(warningMessage: string): void {
-		if (this.dialogueTabs.selected === "conversation")
+		if (this.dialogueTabs?.selected === "conversation")
 			this.recordDialogue({ role: "status", text: `Warning: ${warningMessage}` }, false);
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new ThemedText(() => theme.fg("warning", `Warning: ${warningMessage}`), 1, 0));
@@ -5752,7 +5753,7 @@ export class InteractiveMode {
 	}
 
 	private showUserMessageSelector(): void {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		const userMessages = this.session.getUserMessagesForForking();
 
 		if (userMessages.length === 0) {
@@ -5791,7 +5792,7 @@ export class InteractiveMode {
 	}
 
 	private async handleCloneCommand(): Promise<void> {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		const leafId = this.sessionManager.getLeafId();
 		if (!leafId) {
 			this.showStatus("Nothing to clone yet");
@@ -5813,7 +5814,7 @@ export class InteractiveMode {
 	}
 
 	private showTreeSelector(initialSelectedId?: string): void {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		const tree = this.sessionManager.getTree();
 		const realLeafId = this.sessionManager.getLeafId();
 		const initialFilterMode = this.settingsManager.getTreeFilterMode();
@@ -5963,7 +5964,7 @@ export class InteractiveMode {
 	}
 
 	private showSessionSelector(): void {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		this.showSelector((done) => {
 			const selector = new SessionSelectorComponent(
 				(onProgress, signal) =>
@@ -6010,7 +6011,7 @@ export class InteractiveMode {
 		sessionPath: string,
 		options?: Parameters<ExtensionCommandContext["switchSession"]>[1],
 	): Promise<{ cancelled: boolean }> {
-		if (!this.canNavigateDialogue()) return { cancelled: true };
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return { cancelled: true };
 		this.clearStatusIndicator();
 		try {
 			const result = await this.runtimeHost.switchSession(sessionPath, {
@@ -6687,7 +6688,7 @@ export class InteractiveMode {
 	// =========================================================================
 
 	private async handleReloadCommand(): Promise<void> {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		if (this.session.isStreaming) {
 			this.showWarning("Wait for the current response to finish before reloading.");
 			return;
@@ -6825,7 +6826,7 @@ export class InteractiveMode {
 	}
 
 	private async handleImportCommand(text: string): Promise<void> {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		const inputPath = this.getPathCommandArgument(text, "/import");
 		if (!inputPath) {
 			this.showError("Usage: /import <path.jsonl>");
@@ -7185,7 +7186,7 @@ export class InteractiveMode {
 	}
 
 	private async handleClearCommand(): Promise<void> {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		this.clearStatusIndicator();
 		try {
 			const result = await this.runtimeHost.newSession();
@@ -7340,7 +7341,7 @@ export class InteractiveMode {
 	}
 
 	private async handleCompactCommand(customInstructions?: string): Promise<void> {
-		if (!this.canNavigateDialogue()) return;
+		if (this.dialogueLoop && !this.canNavigateDialogue()) return;
 		this.clearStatusIndicator();
 
 		try {

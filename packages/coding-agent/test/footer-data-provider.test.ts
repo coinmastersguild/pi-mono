@@ -80,6 +80,8 @@ function createReftableWorktree(tempDir: string): WorktreeFixture {
 function emitReftableChange(provider: FooterDataProvider): void {
 	const { reftableWatcher } = provider as unknown as { reftableWatcher: FSWatcher | null };
 	expect(reftableWatcher).not.toBeNull();
+	// Inject events deterministically; native fs events would race the fake clock.
+	reftableWatcher?.close();
 	reftableWatcher?.emit("change", "change", "tables.list");
 }
 

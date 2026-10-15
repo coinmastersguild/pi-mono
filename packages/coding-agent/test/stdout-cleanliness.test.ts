@@ -62,7 +62,7 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
 	);
 
 	return await new Promise((resolvePromise, reject) => {
-		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
+		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, "--unencrypted", ...args], {
 			cwd: projectDir,
 			env: {
 				...process.env,

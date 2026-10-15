@@ -57,6 +57,7 @@ import {
 	type StreamOptions,
 } from "@earendil-works/pi-ai";
 import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
+import { pioneerProvider } from "@earendil-works/pi-ai/providers/pioneer";
 import {
 	assertChatModel,
 	assertClassifierInputSupported,
@@ -70,6 +71,7 @@ import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
+import { loginPioneerInBrowser } from "./pioneer-login.ts";
 import {
 	type AuthStatus,
 	type CompatibilityRequestConfig,
@@ -227,7 +229,19 @@ export class ModelRuntime implements Models {
 		const providers = builtinProviderCatalog
 			.builtinProviders()
 			.map((provider) =>
-				provider.id === "radius"
+				provider.id === "pioneer"
+					? pioneerProvider({
+							name: "Pioneer browser sign-in",
+							login: loginPioneerInBrowser,
+							refresh: async () => {
+								throw new Error("Pioneer API key expired. Run /login to sign in again.");
+							},
+							toAuth: async (credential) => ({ apiKey: credential.access }),
+						})
+					: provider,
+			)
+			.map((provider) =>
+				provider.id === "radius" || provider.id === "pioneer"
 					? provider
 					: withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt),
 			);

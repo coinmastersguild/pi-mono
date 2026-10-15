@@ -130,6 +130,27 @@
       ]
     },
     {
+      "title": "Pioneer",
+      "items": [
+        {
+          "title": "Conversation and Thinking",
+          "path": "dialogue.md"
+        },
+        {
+          "title": "Workspace File Explorer",
+          "path": "workspace-pane.md"
+        },
+        {
+          "title": "Goals",
+          "path": "goals.md"
+        },
+        {
+          "title": "Privacy",
+          "path": "privacy.md"
+        }
+      ]
+    },
+    {
       "title": "Reference",
       "items": [
         {

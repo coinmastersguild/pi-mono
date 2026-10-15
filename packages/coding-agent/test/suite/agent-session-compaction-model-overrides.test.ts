@@ -82,6 +82,7 @@ describe("AgentSession compaction model overrides", () => {
 
 			expect(preparations).toHaveLength(1);
 			expect(preparations[0]?.preparation.settings).toEqual({
+				maxContextTokens: 32768,
 				enabled: path !== "manual",
 				reserveTokens: 2000,
 				keepRecentTokens: 150,

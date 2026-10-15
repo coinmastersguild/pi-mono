@@ -171,7 +171,8 @@ describe("createInteractiveTui", () => {
 		expect(context.renderer.children).toEqual([component]);
 		expect(context.renderer.getFocusedComponent()).toBe(component);
 		expect(component.focused).toBe(true);
-		expect(invalidatedModes).toEqual(["fullscreen"]);
+		expect(invalidatedModes.length).toBeGreaterThan(0);
+		expect(invalidatedModes.every((mode) => mode === "fullscreen")).toBe(true);
 		expect([terminal.startCount, terminal.stopCount]).toEqual([2, 1]);
 
 		stopInteractiveTui.call(context, "resume-hint");

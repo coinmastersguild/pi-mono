@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { launchPrivateCli } from "../../core/privacy/launcher.ts";
 import { type OpenDurableOptions, openDurable } from "./runtime.ts";
 import { runDurableTui } from "./tui.ts";
 
@@ -12,9 +13,11 @@ function parseArgs(argv: readonly string[]): OpenDurableOptions {
 	return { continueSession };
 }
 
-const durable = await openDurable(parseArgs(process.argv.slice(2)));
-try {
-	await runDurableTui(durable.view, durable.controller, durable.settings);
-} finally {
-	await durable.close();
-}
+await launchPrivateCli(process.argv.slice(2), async (args) => {
+	const durable = await openDurable(parseArgs(args));
+	try {
+		await runDurableTui(durable.view, durable.controller, durable.settings);
+	} finally {
+		await durable.close();
+	}
+});

@@ -68,7 +68,7 @@ function readSessionInfoNames(sessionFile: string): string[] {
 
 async function runCli(args: string[], dirs: CliDirs): Promise<CliResult> {
 	let stderr = "";
-	const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
+	const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, "--unencrypted", ...args], {
 		cwd: dirs.projectDir,
 		env: {
 			...process.env,

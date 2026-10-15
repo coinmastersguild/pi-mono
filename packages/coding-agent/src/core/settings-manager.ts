@@ -52,6 +52,7 @@ export type {
 export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const satisfies readonly CacheWarmingMode[];
 
 const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<CompactionModelOverride> = {
+	maxContextTokens: SETTINGS_DEFAULTS.compaction.maxContextTokens,
 	reserveTokens: SETTINGS_DEFAULTS.compaction.reserveTokens,
 	keepRecentTokens: SETTINGS_DEFAULTS.compaction.keepRecentTokens,
 };
@@ -847,6 +848,10 @@ export class SettingsManager {
 		return this.getCompactionTokenSetting("reserveTokens", model);
 	}
 
+	getCompactionMaxContextTokens(model?: Pick<Model<string>, "provider" | "id">): number {
+		return this.getCompactionTokenSetting("maxContextTokens", model);
+	}
+
 	getCompactionKeepRecentTokens(model?: Pick<Model<string>, "provider" | "id">): number {
 		return this.getCompactionTokenSetting("keepRecentTokens", model);
 	}
@@ -854,11 +859,13 @@ export class SettingsManager {
 	/** Resolve each token setting through model override, ordinary setting, then built-in default. */
 	getCompactionSettings(model?: Pick<Model<string>, "provider" | "id">): {
 		enabled: boolean;
+		maxContextTokens: number;
 		reserveTokens: number;
 		keepRecentTokens: number;
 	} {
 		return {
 			enabled: this.getCompactionEnabled(),
+			maxContextTokens: this.getCompactionMaxContextTokens(model),
 			reserveTokens: this.getCompactionReserveTokens(model),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(model),
 		};

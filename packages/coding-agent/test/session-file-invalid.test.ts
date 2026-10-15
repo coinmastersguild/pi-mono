@@ -26,7 +26,7 @@ function createTempDir(): string {
 async function runCli(args: string[], cwd: string, agentDir: string): Promise<{ code: number | null; stderr: string }> {
 	let stderr = "";
 	const code = await new Promise<number | null>((resolvePromise, reject) => {
-		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
+		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, "--unencrypted", ...args], {
 			cwd,
 			env: {
 				...process.env,

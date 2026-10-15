@@ -274,6 +274,7 @@ describe("estimateContextTokens", () => {
 describe("shouldCompact", () => {
 	it("should return true when context exceeds threshold", () => {
 		const settings: CompactionSettings = {
+			maxContextTokens: 0,
 			enabled: true,
 			reserveTokens: 10000,
 			keepRecentTokens: 20000,
@@ -281,6 +282,12 @@ describe("shouldCompact", () => {
 
 		expect(shouldCompact(95000, 100000, settings)).toBe(true);
 		expect(shouldCompact(89000, 100000, settings)).toBe(false);
+	});
+
+	it("compacts at the working budget even on a model with a larger window", () => {
+		expect(shouldCompact(24576, 128000, DEFAULT_COMPACTION_SETTINGS)).toBe(false);
+		expect(shouldCompact(24577, 128000, DEFAULT_COMPACTION_SETTINGS)).toBe(true);
+		expect(shouldCompact(20000, 24000, DEFAULT_COMPACTION_SETTINGS)).toBe(true);
 	});
 
 	it("should return false when disabled", () => {

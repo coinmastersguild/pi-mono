@@ -68,8 +68,9 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | `compaction.enabled` | boolean | `true` | Enable automatic compaction. |
-| `compaction.reserveTokens` | number | `16384` | Tokens reserved for the model response. |
-| `compaction.keepRecentTokens` | number | `20000` | Recent tokens retained without summarization. |
+| `compaction.maxContextTokens` | number | `32768` | Maximum estimated working-context tokens, including prompt and tools. `0` disables the cap. |
+| `compaction.reserveTokens` | number | `8192` | Tokens reserved for the model response and used to size summaries. |
+| `compaction.keepRecentTokens` | number | `8192` | Recent tokens retained without summarization. |
 | `compaction.modelOverrides` | object | None | Per-model token settings keyed by exact `provider/modelId`. |
 
 <a id="per-model-compaction-overrides"></a>

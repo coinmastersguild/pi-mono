@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getModel, getSupportedThinkingLevels } from "../src/compat.ts";
+import { getModel, getSupportedThinkingLevels, type Model } from "../src/compat.ts";
+import legacyGoFlash from "./fixtures/opencode-go-v4-flash.json" with { type: "json" };
 
 describe("getSupportedThinkingLevels", () => {
 	it("includes max but not xhigh for Anthropic Opus 4.6 on anthropic-messages API", () => {
@@ -176,7 +177,8 @@ describe("getSupportedThinkingLevels", () => {
 	});
 
 	it("includes low/high/max plus off for DeepSeek V4 Flash on opencode-go", () => {
-		const model = getModel("opencode-go", "deepseek-v4-flash");
+		// Frozen metadata preserves this regression when the live catalog retires the model.
+		const model = legacyGoFlash as Model<"openai-completions">;
 		expect(model).toBeDefined();
 		expect(getSupportedThinkingLevels(model!)).toEqual(["off", "low", "high", "max"]);
 	});

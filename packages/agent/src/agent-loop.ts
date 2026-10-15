@@ -286,7 +286,8 @@ async function runLoop(
 			const decision = await config.finishTurn?.(lastCompletedTurn, signal);
 			await emit({ type: "turn_end", message, toolResults });
 
-			if (decision?.action === "end") {
+			// A tool or turn boundary can abort the run before the next provider request.
+			if (signal?.aborted || decision?.action === "end") {
 				await emit({ type: "agent_end", messages: newMessages });
 				return;
 			}

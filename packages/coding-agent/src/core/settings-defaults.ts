@@ -7,8 +7,9 @@ export const SETTINGS_DEFAULTS = {
 	followUpMode: "one-at-a-time",
 	compaction: {
 		enabled: true,
-		reserveTokens: 16384,
-		keepRecentTokens: 20000,
+		reserveTokens: 8192,
+		keepRecentTokens: 8192,
+		maxContextTokens: 32768,
 	},
 	branchSummary: {
 		reserveTokens: 16384,

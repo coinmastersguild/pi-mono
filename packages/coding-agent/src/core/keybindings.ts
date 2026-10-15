@@ -23,6 +23,9 @@ export function useWindowsKeybindings(
 const windowsKeybindings = useWindowsKeybindings();
 
 const APP_KEYBINDINGS = {
+	"app.dialogue.toggle": { defaultKeys: "f6", description: "Switch Conversation / Thinking tabs" },
+	"app.workspace.toggle": { defaultKeys: "ctrl+shift+e", description: "Toggle live workspace pane" },
+	"app.workspace.focus": { defaultKeys: "alt+e", description: "Focus live workspace pane or return to chat" },
 	"app.interrupt": { defaultKeys: "escape", description: "Cancel or abort" },
 	"app.clear": { defaultKeys: "ctrl+c", description: "Clear editor" },
 	"app.exit": { defaultKeys: "ctrl+d", description: "Exit when editor is empty" },

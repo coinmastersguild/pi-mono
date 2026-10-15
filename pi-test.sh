@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
 # Check for --no-env flag
 NO_ENV=false
@@ -17,6 +18,7 @@ done
 if [[ "$NO_ENV" == "true" ]]; then
   # Unset API keys (see packages/ai/src/env-api-keys.ts)
   unset ANTHROPIC_API_KEY
+  unset PIONEER_API_KEY
   unset ANTHROPIC_OAUTH_TOKEN
   unset OPENAI_API_KEY
   unset GEMINI_API_KEY
@@ -56,4 +58,8 @@ fi
 
 # --import takes a module specifier, so pass the resolver as a file URL (raw paths break on #, ?, %).
 RESOLVER_URL="$(node -p 'require("node:url").pathToFileURL(process.argv[1]).href' "$SCRIPT_DIR/packages/coding-agent/src/experimental/source-resolver.ts")"
-node --import "$RESOLVER_URL" "$SCRIPT_DIR/packages/coding-agent/src/experimental/cli.ts" ${ARGS[@]+"${ARGS[@]}"}
+NODE_ARGS=()
+if [[ "$NO_ENV" != "true" && -f "$SCRIPT_DIR/.env" ]]; then
+  NODE_ARGS+=(--env-file "$SCRIPT_DIR/.env")
+fi
+exec node ${NODE_ARGS[@]+"${NODE_ARGS[@]}"} --import "$RESOLVER_URL" "$SCRIPT_DIR/packages/coding-agent/src/experimental/cli.ts" ${ARGS[@]+"${ARGS[@]}"}

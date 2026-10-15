@@ -66,7 +66,7 @@ async function runCli(args: string[]): Promise<{ code: number | null; agentDir: 
 	mkdirSync(projectDir, { recursive: true });
 
 	const code = await new Promise<number | null>((resolvePromise, reject) => {
-		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
+		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, "--unencrypted", ...args], {
 			cwd: projectDir,
 			env: {
 				...process.env,

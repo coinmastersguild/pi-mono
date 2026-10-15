@@ -242,6 +242,31 @@ export type {
 	ResolvedResource,
 } from "./core/package-manager.ts";
 export { DefaultPackageManager } from "./core/package-manager.ts";
+export type {
+	AnalyticAnswer,
+	AnalyticClientOptions,
+	AnalyticQuestion,
+	AnalyticResult,
+	AnalyticState,
+	RetrievalDocument,
+	SelectToolsOptions,
+	TextFile,
+	ToolRisk,
+} from "./core/pioneer-analytic/index.ts";
+export {
+	AnalyticClient,
+	buildCodeCandidates,
+	buildGuildCandidates,
+	classifyToolRisk,
+	createPioneerAnalyticExtension,
+	extractSessionDocuments,
+	loadSessionHistory,
+	rankLexically,
+	rerankWithAnalytic,
+	selectTools,
+} from "./core/pioneer-analytic/index.ts";
+export { type CoreQuestion, PioneerCoreClient, PioneerCoreError } from "./core/pioneer-core.ts";
+export { type PioneerGoal, readPioneerGoal } from "./core/pioneer-goal.ts";
 export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
 // SDK for programmatic usage
@@ -403,11 +428,13 @@ export {
 	type VirtualModelDefinition,
 	type VirtualModelStateData,
 } from "./core/virtual-models.ts";
-// Built-in extensions. The CLI loads them; SDK sessions add them to their extension factories.
 export { type CodemodeExtensionOptions, createCodemodeExtension } from "./extensions/codemode/index.ts";
 export type { CodemodeStoreEntryData, CodemodeToolDetails } from "./extensions/codemode/tool.ts";
 export type { LoadedMcpConfig, McpExposure, McpServerConfig, McpServerEntry } from "./extensions/mcp/config.ts";
 export { createMcpExtension, type McpExtensionOptions, type McpTransportFactory } from "./extensions/mcp/index.ts";
+// Built-in extensions. The CLI loads them; SDK sessions add them to their extension factories.
+export { default as createPioneerCoreExtension } from "./extensions/pioneer-core.ts";
+export { default as createPioneerGoalExtension } from "./extensions/pioneer-goal.ts";
 export { createToolSearchExtension } from "./extensions/tool-search/index.ts";
 // Main entry point
 export { type MainOptions, main } from "./main.ts";

@@ -40,6 +40,11 @@ describe("AgentSession virtual models", () => {
 		const requests: ModelRouteRequest[] = [];
 		const harness = await createHarness({
 			...options,
+			// Routing tests exercise physical model limits, independently of the working-context cap.
+			settings: {
+				...options.settings,
+				compaction: { maxContextTokens: 0, ...options.settings?.compaction },
+			},
 			models: [
 				{ id: "small", contextWindow: 1000 },
 				{ id: "large", contextWindow: 50_000, maxTokens: 4000, reasoning: true },

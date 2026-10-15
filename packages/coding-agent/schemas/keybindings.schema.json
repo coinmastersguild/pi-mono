@@ -195,6 +195,18 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Scroll viewport to bottom"
     },
+    "app.dialogue.toggle": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Switch Conversation / Thinking tabs"
+    },
+    "app.workspace.toggle": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Toggle live workspace pane"
+    },
+    "app.workspace.focus": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Focus live workspace pane or return to chat"
+    },
     "app.interrupt": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Cancel or abort"

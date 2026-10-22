@@ -95,7 +95,8 @@ export async function getLatestPiVersion(
 }
 
 export async function checkForNewPiVersion(currentVersion: string): Promise<LatestPiRelease | undefined> {
-	if (process.env.PI_SKIP_VERSION_CHECK) return undefined;
+	// Pioneer: nothing leaves the machine before the user asks. The check reports to upstream's pi.dev, so it is opt-in.
+	if (process.env.PI_SKIP_VERSION_CHECK || process.env.PI_VERSION_CHECK !== "1") return undefined;
 
 	try {
 		const latestRelease = await getLatestPiRelease(currentVersion);

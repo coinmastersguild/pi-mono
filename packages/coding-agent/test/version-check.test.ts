@@ -13,10 +13,13 @@ const originalSkipVersionCheck = process.env.PI_SKIP_VERSION_CHECK;
 
 beforeEach(() => {
 	allowNetwork();
+	// Pioneer: automatic checks are opt-in; these tests exercise the opted-in path.
+	process.env.PI_VERSION_CHECK = "1";
 });
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	delete process.env.PI_VERSION_CHECK;
 	if (originalSkipVersionCheck === undefined) {
 		delete process.env.PI_SKIP_VERSION_CHECK;
 	} else {
@@ -109,6 +112,15 @@ describe("version checks", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({ note: "**Read this**", version: "1.2.4" });
+	});
+
+	it("makes no automatic call to pi.dev unless the user opts in", async () => {
+		delete process.env.PI_VERSION_CHECK;
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(checkForNewPiVersion("1.2.2")).resolves.toBeUndefined();
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("skips automatic api calls when version checks are disabled", async () => {

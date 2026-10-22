@@ -48,10 +48,10 @@ interface AnalyticRuntime {
 	fallbacks: number;
 }
 
-export function analyticEnabled(apiKey?: string, requested = false): boolean {
+/** Opt-in only: prompts, tool inputs and code go to Alpha, so a saved login key alone never enables it. */
+export function analyticEnabled(_apiKey?: string, requested = false): boolean {
 	const value = process.env.PIONEER_ANALYTIC_ENABLED?.toLowerCase();
-	if (value === "0" || value === "false" || value === "no") return requested;
-	return requested || value === "1" || value === "true" || value === "yes" || Boolean(apiKey);
+	return requested || value === "1" || value === "true" || value === "yes";
 }
 
 function collectFiles(
@@ -267,10 +267,11 @@ export const createPioneerAnalyticExtension: ExtensionFactory = (pi: ExtensionAP
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (!runtime.enabled) return undefined;
+		// The local guardrail always runs; only the remote probe needs analytics.
 		const risk = classifyToolRisk(event.toolName, event.input as Record<string, unknown>);
 		let analyticBlock = false;
-		if (runtime.client && risk.level >= 3) {
+		let unavailable = false;
+		if (runtime.enabled && runtime.client && risk.level >= 3) {
 			try {
 				runtime.requests++;
 				const result = await runtime.client.evaluate(
@@ -294,12 +295,18 @@ export const createPioneerAnalyticExtension: ExtensionFactory = (pi: ExtensionAP
 				);
 				analyticBlock = result.answers.unsafe?.type === "noul" && result.answers.unsafe.noul >= 0.9;
 			} catch {
+				// Fail closed: an unreachable gate asks instead of allowing.
 				runtime.fallbacks++;
+				unavailable = true;
 			}
 		}
-		if (!risk.block && !analyticBlock) return undefined;
-		const reason = risk.block ? risk.reason : "Pioneer Analytic identified high action risk";
-		if (runtime.mode === "shadow") {
+		if (!risk.block && !analyticBlock && !unavailable) return undefined;
+		const reason = risk.block
+			? risk.reason
+			: analyticBlock
+				? "Pioneer Analytic identified high action risk"
+				: "Pioneer Analytic is unavailable to check this high-risk action";
+		if (runtime.mode === "shadow" && !risk.block) {
 			ctx.ui.notify(`Analytic shadow warning: ${reason}`, "warning");
 			return undefined;
 		}

@@ -12,13 +12,15 @@ import {
 } from "../src/core/pioneer-analytic/index.ts";
 
 describe("Pioneer Analytic client", () => {
-	it("uses resolved Pioneer credentials by default and honors explicit analytics disable", () => {
+	it("is opt-in: a saved login key alone never sends prompts or tool inputs to Alpha", () => {
 		vi.stubEnv("PIONEER_ANALYTIC_ENABLED", "");
-		expect(analyticEnabled("saved-login-key")).toBe(true);
+		expect(analyticEnabled("saved-login-key")).toBe(false);
 		expect(analyticEnabled()).toBe(false);
+		expect(analyticEnabled("saved-login-key", true)).toBe(true);
+		vi.stubEnv("PIONEER_ANALYTIC_ENABLED", "1");
+		expect(analyticEnabled()).toBe(true);
 		vi.stubEnv("PIONEER_ANALYTIC_ENABLED", "0");
 		expect(analyticEnabled("saved-login-key")).toBe(false);
-		expect(analyticEnabled("saved-login-key", true)).toBe(true);
 		vi.unstubAllEnvs();
 	});
 	it("validates typed answers", async () => {

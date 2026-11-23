@@ -7,6 +7,7 @@
 
 import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
+import { PIONEER_GLM53_MODEL_ID } from "@earendil-works/pi-ai/providers/pioneer";
 import { setCapabilityOverrides } from "@earendil-works/pi-tui";
 import chalk from "chalk";
 import { type Args, type Mode, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
@@ -810,6 +811,20 @@ export async function main(args: string[], options?: MainOptions) {
 		];
 
 		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+		const explicitGlm =
+			(parsed.provider === "pioneer" && parsed.model === PIONEER_GLM53_MODEL_ID) ||
+			(!parsed.provider &&
+				(parsed.model === PIONEER_GLM53_MODEL_ID || parsed.model === `pioneer/${PIONEER_GLM53_MODEL_ID}`));
+		if (
+			!offlineMode &&
+			(parsed.listModels !== undefined ||
+				explicitGlm ||
+				settingsManager.getDefaultModel() === PIONEER_GLM53_MODEL_ID ||
+				modelPatterns?.some((model) => model.includes(PIONEER_GLM53_MODEL_ID)))
+		) {
+			if (explicitGlm && parsed.apiKey) await modelRuntime.setRuntimeApiKey("pioneer", parsed.apiKey);
+			await modelRuntime.refresh({ providers: ["pioneer"], signal: AbortSignal.timeout(15_000) });
+		}
 		const scopedModels =
 			modelPatterns && modelPatterns.length > 0
 				? await resolveModelScope(modelPatterns, modelRuntime, { signal: AbortSignal.timeout(15_000) })

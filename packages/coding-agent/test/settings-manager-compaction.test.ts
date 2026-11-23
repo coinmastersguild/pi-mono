@@ -13,6 +13,19 @@ describe("compaction model overrides", () => {
 		expect(manager.getCompactionSettings(model)).toEqual(defaults);
 	});
 
+	it("uses the discovered GLM context and reserves its output budget by default", () => {
+		const glm = { provider: "pioneer", id: "glm-5.3-flash-local", maxTokens: 16384 };
+		expect(SettingsManager.inMemory().getCompactionSettings(glm)).toEqual({
+			...defaults,
+			maxContextTokens: 0,
+			reserveTokens: 16384,
+		});
+		const manager = SettingsManager.inMemory({
+			compaction: { modelOverrides: { "pioneer/glm-5.3-flash-local": { maxContextTokens: 32768 } } },
+		});
+		expect(manager.getCompactionSettings(glm).maxContextTokens).toBe(32768);
+	});
+
 	it("resolves each field independently and keeps individual getters consistent", () => {
 		const manager = SettingsManager.inMemory({
 			compaction: {

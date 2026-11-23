@@ -42,8 +42,14 @@ jobs:
           node-version: '22'
           registry-url: https://registry.npmjs.org
       - run: npm ci --ignore-scripts
-      - run: npm run hydrate:model-data
+      - name: Restore the published Pioneer model catalog
+        run: |
+          npm pack @pioneer-platform/pioneer-cli@1.1.1 --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          node scripts/restore-pioneer-release-catalog.mjs "$RUNNER_TEMP/pioneer-platform-pioneer-cli-1.1.1.tgz"
       - run: npm run check
+      - name: Pioneer model discovery tests
+        working-directory: packages/ai
+        run: node ../../node_modules/vitest/dist/cli.js --run test/pioneer-model-discovery.test.ts
       - name: Pioneer regression tests
         working-directory: packages/coding-agent
         run: >-

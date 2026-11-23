@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
+import { PIONEER_GLM53_MODEL_ID } from "@earendil-works/pi-ai/providers/pioneer";
 import type { ScrollViewScrollbar, TerminalCapabilities, WheelScrollLines } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -56,6 +57,8 @@ const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<CompactionModelOverride> = {
 	reserveTokens: SETTINGS_DEFAULTS.compaction.reserveTokens,
 	keepRecentTokens: SETTINGS_DEFAULTS.compaction.keepRecentTokens,
 };
+
+type CompactionModel = Pick<Model<string>, "provider" | "id"> & Partial<Pick<Model<string>, "maxTokens">>;
 
 function isMergeableObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -816,10 +819,7 @@ export class SettingsManager {
 		this.save();
 	}
 
-	private getCompactionTokenSetting(
-		field: keyof CompactionModelOverride,
-		model?: Pick<Model<string>, "provider" | "id">,
-	): number {
+	private getCompactionTokenSetting(field: keyof CompactionModelOverride, model?: CompactionModel): number {
 		const compaction = this.settings.compaction;
 		const ordinary = compaction?.[field];
 		if (ordinary !== undefined && (typeof ordinary !== "number" || !Number.isSafeInteger(ordinary) || ordinary < 0)) {
@@ -841,10 +841,16 @@ export class SettingsManager {
 				`Invalid compaction.modelOverrides["${modelKey}"].${field} setting: ${String(override)}. Expected a non-negative safe integer.`,
 			);
 		}
-		return override ?? ordinary ?? DEFAULT_COMPACTION_TOKEN_SETTINGS[field];
+		const configured = override ?? ordinary;
+		if (configured !== undefined) return configured;
+		if (model?.provider === "pioneer" && model.id === PIONEER_GLM53_MODEL_ID) {
+			if (field === "maxContextTokens") return 0;
+			if (field === "reserveTokens" && model.maxTokens !== undefined) return model.maxTokens;
+		}
+		return DEFAULT_COMPACTION_TOKEN_SETTINGS[field];
 	}
 
-	getCompactionReserveTokens(model?: Pick<Model<string>, "provider" | "id">): number {
+	getCompactionReserveTokens(model?: CompactionModel): number {
 		return this.getCompactionTokenSetting("reserveTokens", model);
 	}
 
@@ -857,7 +863,7 @@ export class SettingsManager {
 	}
 
 	/** Resolve each token setting through model override, ordinary setting, then built-in default. */
-	getCompactionSettings(model?: Pick<Model<string>, "provider" | "id">): {
+	getCompactionSettings(model?: CompactionModel): {
 		enabled: boolean;
 		maxContextTokens: number;
 		reserveTokens: number;

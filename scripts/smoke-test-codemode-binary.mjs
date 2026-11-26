@@ -50,9 +50,11 @@ function toolResultContainsMarker(body) {
 
 async function main() {
 	const binaryArg = process.argv[2];
-	if (!binaryArg || process.argv.length !== 3) {
-		throw new Error("Usage: node scripts/smoke-test-codemode-binary.mjs <pi-binary>");
+	const pioneer = process.argv[3] === "--pioneer";
+	if (!binaryArg || process.argv.length !== (pioneer ? 4 : 3)) {
+		throw new Error("Usage: node scripts/smoke-test-codemode-binary.mjs <pi-binary> [--pioneer]");
 	}
+	const provider = pioneer ? "pioneer" : "codemode-smoke";
 	const binary = resolve(binaryArg);
 	const tempDir = await mkdtemp(join(tmpdir(), "pi-codemode-binary-smoke-"));
 	let requestCount = 0;
@@ -102,7 +104,7 @@ async function main() {
 			join(tempDir, "models.json"),
 			JSON.stringify({
 				providers: {
-					"codemode-smoke": {
+					[provider]: {
 						baseUrl: `http://127.0.0.1:${address.port}/v1`,
 						api: "openai-completions",
 						apiKey: "smoke-test",
@@ -114,7 +116,7 @@ async function main() {
 
 		const piArgs = [
 			"--provider",
-			"codemode-smoke",
+			provider,
 			"--model",
 			"codemode-smoke",
 			"--tools",
@@ -135,6 +137,7 @@ async function main() {
 				...process.env,
 				PI_CODING_AGENT_DIR: tempDir,
 				PIONEER_CODING_AGENT_DIR: tempDir,
+				PIONEER_API_KEY: "",
 				PI_OFFLINE: "1",
 			},
 			stdio: ["ignore", "pipe", "pipe"],

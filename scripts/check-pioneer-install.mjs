@@ -22,12 +22,19 @@ try {
 	if (version.trim() !== artifact.version) throw new Error("Wrong installed version");
 	const help = execFileSync(process.execPath, [cli, "--help"], { cwd: directory, env, encoding: "utf8" });
 	if (!help.includes("--private") || !help.includes("encryption is off")) throw new Error("Privacy help missing");
+	if (!help.includes("https://alpha.pioneers.dev/keys") || help.includes("ANTHROPIC_API_KEY")) {
+		throw new Error("Expected Pioneer-only sign-in help");
+	}
+	const models = execFileSync(process.execPath, [cli, "--list-models"], {
+		cwd: directory, env: { ...env, PIONEER_API_KEY: "offline-pioneer-key", ANTHROPIC_API_KEY: "offline-unused-key" }, encoding: "utf8",
+	});
+	if (!/^pioneer\s+auto\s/m.test(models) || /^anthropic\s/m.test(models)) throw new Error("Expected only Pioneer models");
 	writeFileSync(join(directory, "sdk-smoke.mjs"), `import assert from 'node:assert/strict';\nimport { createAgentSession, PioneerCoreClient, createPioneerCoreExtension, createPioneerAnalyticExtension, createPioneerGoalExtension, readPioneerGoal } from '${pioneerPackageName}';\nassert.equal(typeof createAgentSession, 'function');\nassert.equal(typeof PioneerCoreClient, 'function');\nassert.equal(typeof createPioneerCoreExtension, 'function');\nassert.equal(typeof createPioneerAnalyticExtension, 'function');\nassert.equal(typeof createPioneerGoalExtension, 'function');\nassert.equal(typeof readPioneerGoal, 'function');\n`);
 	execFileSync(process.execPath, [join(directory, "sdk-smoke.mjs")], { cwd: directory, env, stdio: "inherit" });
 	writeFileSync(join(directory, "context-smoke.mjs"), `import assert from 'node:assert/strict';\nimport { SettingsManager } from '${pioneerPackageName}';\nassert.deepEqual(SettingsManager.inMemory().getCompactionSettings(), { enabled: true, maxContextTokens: 32768, reserveTokens: 8192, keepRecentTokens: 8192 });\n`);
 	execFileSync(process.execPath, [join(directory, "context-smoke.mjs")], { cwd: directory, env, stdio: "inherit" });
 	const root = fileURLToPath(new URL("..", import.meta.url));
-	execFileSync(process.execPath, [join(root, "scripts/smoke-test-codemode-binary.mjs"), cli], { cwd: directory, env, stdio: "inherit" });
+	execFileSync(process.execPath, [join(root, "scripts/smoke-test-codemode-binary.mjs"), cli, "--pioneer"], { cwd: directory, env, stdio: "inherit" });
 	execFileSync(process.execPath, [join(root, "scripts/smoke-test-pioneer-goal.mjs"), cli], { cwd: directory, env, stdio: "inherit" });
 	if (process.argv.includes("--live")) {
 		const envFile = join(root, ".env");

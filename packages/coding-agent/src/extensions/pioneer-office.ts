@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { getAgentDir, VERSION } from "../config.ts";
+import { getAgentDir, IS_PIONEER_DISTRIBUTION, VERSION } from "../config.ts";
 import type { ExtensionAPI, ExtensionContext } from "../core/extensions/types.ts";
 import { OfficeConnection } from "../core/pioneer-office.ts";
 import { resolveHeadersOrThrow } from "../core/resolve-config-value.ts";
@@ -20,14 +20,15 @@ export default function pioneerOffice(pi: ExtensionAPI): void {
 		connection = undefined;
 		context = ctx;
 		if (ctx.mode === "tui") {
+			const title = IS_PIONEER_DISTRIBUTION ? "Pioneer CLI" : "Pioneer Pi";
 			ctx.ui.setHeader((_tui, theme) => ({
 				render: (width) => [
-					truncateToWidth(`${theme.fg("accent", "Pioneer")} ${theme.fg("dim", `Pi ${VERSION}`)}`, width),
+					truncateToWidth(`${theme.fg("accent", title)} ${theme.fg("dim", `v${VERSION}`)}`, width),
 					truncateToWidth(theme.fg("muted", "/office  ·  /mcp  ·  /model  ·  /login"), width),
 				],
 				invalidate() {},
 			}));
-			ctx.ui.setTitle("Pioneer Pi");
+			ctx.ui.setTitle(title);
 		}
 		if (process.argv.includes("--no-mcp")) return;
 		const config = loadMcpConfig({ agentDir: getAgentDir(), cwd: ctx.cwd, projectTrusted: ctx.isProjectTrusted() });

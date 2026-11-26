@@ -9,6 +9,7 @@ import {
 	Text,
 	type TUI,
 } from "@earendil-works/pi-tui";
+import { IS_PIONEER_DISTRIBUTION } from "../../../config.ts";
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
 import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
 import { getModelSelectorSearchText } from "../model-search.ts";
@@ -107,8 +108,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			this.scopeHintText = new Text(this.getScopeHintText(), 0, 0);
 			this.addChild(this.scopeHintText);
 		} else {
-			const hintText = "Only showing models from configured providers. Use /login to add providers.";
-			this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
+			const hint = IS_PIONEER_DISTRIBUTION
+				? theme.fg("accent", "Pioneer models")
+				: theme.fg("warning", "Only showing models from configured providers. Use /login to add providers.");
+			this.addChild(new Text(hint, 0, 0));
 		}
 		this.addChild(new Spacer(1));
 

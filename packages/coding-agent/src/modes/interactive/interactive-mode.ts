@@ -63,6 +63,7 @@ import {
 	getAuthPath,
 	getDebugLogPath,
 	getDocsPath,
+	IS_PIONEER_DISTRIBUTION,
 	VERSION,
 } from "../../config.ts";
 import { type AgentSession, type AgentSessionEvent, parseSkillBlock } from "../../core/agent-session.ts";
@@ -799,7 +800,7 @@ export class InteractiveMode {
 		}
 
 		const loginCommand = slashCommands.find((command) => command.name === "login");
-		if (loginCommand) {
+		if (loginCommand && !IS_PIONEER_DISTRIBUTION) {
 			loginCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
 				const providers = getLoginProviderCompletionOptions(this.getLoginProviderOptions());
 				return createFuzzyAutocompleteItems(providers, prefix, getLoginProviderSearchText, (provider) => ({
@@ -1056,8 +1057,11 @@ export class InteractiveMode {
 			// Built on demand so the header follows theme changes. The logo's first line carries the version,
 			// its second line the first line of key hints. Terminals that cannot render the logo get a
 			// "Pi vX" line instead, with the key hints below it.
-			const showLogo = supportsPiLogo();
+			const showLogo = !IS_PIONEER_DISTRIBUTION && supportsPiLogo();
 			const withLogo = (hints: string) => {
+				if (IS_PIONEER_DISTRIBUTION) {
+					return `${theme.fg("accent", "Pioneer CLI")} ${theme.fg("dim", `v${this.version}`)}\n${hints}`;
+				}
 				if (!showLogo) return `${piWordmark()} ${theme.fg("dim", `v${this.version}`)}\n${hints}`;
 				const [top, bottom] = piLogoLines();
 				return `${top} ${theme.fg("dim", `v${this.version}`)}\n${bottom} ${hints}`;
@@ -1105,10 +1109,12 @@ export class InteractiveMode {
 					`Press ${keyText("app.tools.expand")} to show full startup help${showDetails ? " and loaded resources" : ""}.`,
 				);
 			const onboarding = () =>
-				theme.fg("dim", `Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.`);
+				IS_PIONEER_DISTRIBUTION
+					? ""
+					: `\n\n${theme.fg("dim", "Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")}`;
 			const header = new BuiltInHeader(
-				() => `${withLogo(compactInstructions())}\n${compactOnboarding()}\n\n${onboarding()}`,
-				() => `${withLogo(expandedInstructions())}\n\n${onboarding()}`,
+				() => `${withLogo(compactInstructions())}\n${compactOnboarding()}${onboarding()}`,
+				() => `${withLogo(expandedInstructions())}${onboarding()}`,
 				this.getStartupExpansionState(),
 				1,
 				0,
@@ -1271,6 +1277,14 @@ export class InteractiveMode {
 		}
 
 		void this.maybeWarnAboutAnthropicSubscriptionAuth();
+
+		if (
+			IS_PIONEER_DISTRIBUTION &&
+			!process.env.PI_OFFLINE &&
+			this.session.modelRuntime.getAvailableSnapshot().length === 0
+		) {
+			await this.handleLoginCommand();
+		}
 
 		// Process initial messages
 		if (initialMessage) {
@@ -6109,6 +6123,15 @@ export class InteractiveMode {
 	}
 
 	private async handleLoginCommand(providerRef?: string): Promise<void> {
+		if (IS_PIONEER_DISTRIBUTION) {
+			if (providerRef && providerRef.toLowerCase() !== "pioneer") {
+				this.showStatus("Use /login to sign in to Pioneer.");
+				return;
+			}
+			await this.showApiKeyLoginDialog("pioneer", "Pioneer");
+			return;
+		}
+
 		if (!providerRef) {
 			this.showLoginAuthTypeSelector();
 			return;
@@ -6542,7 +6565,7 @@ export class InteractiveMode {
 		} else if (prompt.type === "manual_code") {
 			response = dialog.showManualInput(prompt.message);
 		} else {
-			response = dialog.showPrompt(prompt.message, prompt.placeholder);
+			response = dialog.showPrompt(prompt.message, prompt.placeholder, { secret: prompt.type === "secret" });
 		}
 		if (!prompt.signal) return response;
 		if (prompt.signal.aborted) throw new Error("Login cancelled");

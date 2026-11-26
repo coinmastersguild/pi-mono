@@ -1,6 +1,6 @@
 export const pioneerPackageName = "@pioneer-platform/pioneer-cli";
 // Pioneer releases independently; bundled upstream workspace dependencies remain at their published versions.
-export const pioneerPackageVersion = "1.1.2";
+export const pioneerPackageVersion = "1.1.3";
 
 /** CLI and SDK both use the bundle so Pioneer provider changes do not depend on upstream publication. */
 export function pioneerPackageManifest(source) {

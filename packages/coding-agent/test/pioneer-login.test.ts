@@ -48,6 +48,48 @@ describe("Pioneer browser sign-in", () => {
 		vi.unstubAllEnvs();
 	});
 
+	it("offers only Pioneer and saves a pasted key after Alpha accepts it", async () => {
+		const verify = vi.fn(async () => new Response("{}"));
+		vi.stubGlobal("fetch", verify);
+		vi.stubEnv("PIONEER_API_KEY", "");
+		const credentials = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "unused" } });
+		const runtime = await ModelRuntime.create({ credentials, modelsPath: null, pioneerOnly: true });
+		expect(runtime.getProviders().map(({ id }) => id)).toEqual(["pioneer"]);
+		const notify = vi.fn();
+		const prompt = vi.fn(async () => `  ${KEY}\n`);
+
+		await expect(runtime.login("pioneer", "api_key", { notify, prompt })).resolves.toEqual({
+			type: "api_key",
+			key: KEY,
+		});
+		expect(notify).toHaveBeenCalledWith({
+			type: "info",
+			message: "Get a Pioneer API key at",
+			links: [{ url: `${ORIGIN}/keys` }],
+		});
+		expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ type: "secret" }));
+		expect(verify).toHaveBeenCalledWith(
+			`${ORIGIN}/api/v1/account`,
+			expect.objectContaining({ headers: { Authorization: `Bearer ${KEY}` }, redirect: "error" }),
+		);
+		expect(await credentials.read("pioneer")).toEqual({ type: "api_key", key: KEY });
+		expect(runtime.getAvailableSnapshot().map(({ provider, id }) => `${provider}/${id}`)).toEqual(["pioneer/auto"]);
+	});
+
+	it("keeps the existing key when Alpha rejects a pasted replacement", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response(null, { status: 401 })),
+		);
+		const saved = { type: "api_key", key: "existing" } as const;
+		const credentials = AuthStorage.inMemory({ pioneer: saved });
+		const runtime = await ModelRuntime.create({ credentials, modelsPath: null, pioneerOnly: true });
+		await expect(runtime.login("pioneer", "api_key", { notify: () => {}, prompt: async () => KEY })).rejects.toThrow(
+			"Pioneer rejected the API key (HTTP 401)",
+		);
+		expect(await credentials.read("pioneer")).toEqual(saved);
+	});
+
 	it("receives and verifies a browser credential without manual input", async () => {
 		const verify = vi.fn(async () => new Response("{}"));
 		vi.stubGlobal("fetch", verify);

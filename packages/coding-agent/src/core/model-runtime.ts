@@ -66,12 +66,12 @@ import {
 	classifierErrorResult,
 	imageErrorResult,
 } from "@earendil-works/pi-ai/utils/model-operations";
-import { getAgentDir } from "../config.ts";
+import { getAgentDir, IS_PIONEER_DISTRIBUTION } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
-import { loginPioneerInBrowser } from "./pioneer-login.ts";
+import { loginPioneerInBrowser, loginPioneerWithApiKey } from "./pioneer-login.ts";
 import {
 	type AuthStatus,
 	type CompatibilityRequestConfig,
@@ -114,6 +114,8 @@ export interface CreateModelRuntimeOptions {
 	modelsPath?: string | null;
 	modelsStore?: ModelsStore;
 	modelsStorePath?: string;
+	/** Limit the model runtime to Pioneer. Defaults to true in the Pioneer distribution. */
+	pioneerOnly?: boolean;
 	/** Allow create() to refresh model catalogs over the network. Defaults to false. */
 	allowModelNetwork?: boolean;
 	/** Timeout for the create-time network model refresh. */
@@ -183,6 +185,7 @@ export class ModelRuntime implements Models {
 	private readonly compositionErrors = new Map<string, string>();
 	private readonly modelsPath: string | undefined;
 	private readonly modelNetworkEnabled: boolean;
+	private readonly pioneerOnly: boolean;
 	private config: ModelConfig;
 	private snapshot: ModelRuntimeSnapshot = {
 		all: [],
@@ -204,11 +207,13 @@ export class ModelRuntime implements Models {
 		modelsStore: ModelsStore,
 		providers: readonly Provider[],
 		modelNetworkEnabled: boolean,
+		pioneerOnly: boolean,
 	) {
 		this.credentials = credentials;
 		this.config = config;
 		this.modelsPath = modelsPath;
 		this.modelNetworkEnabled = modelNetworkEnabled;
+		this.pioneerOnly = pioneerOnly;
 		this.defaultBuiltins = new Map(providers.map((provider) => [provider.id, provider]));
 		for (const [providerId, provider] of this.defaultBuiltins) this.builtins.set(providerId, provider);
 		this.models = createModels({ credentials, modelsStore });
@@ -225,26 +230,29 @@ export class ModelRuntime implements Models {
 			(modelsPath
 				? new FileModelsStore(options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"))
 				: new InMemoryCodingAgentModelsStore());
-		const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
-		const providers = builtinProviderCatalog
-			.builtinProviders()
-			.map((provider) =>
-				provider.id === "pioneer"
-					? pioneerProvider({
-							name: "Pioneer browser sign-in",
-							login: loginPioneerInBrowser,
-							refresh: async () => {
-								throw new Error("Pioneer API key expired. Run /login to sign in again.");
-							},
-							toAuth: async (credential) => ({ apiKey: credential.access }),
-						})
-					: provider,
-			)
-			.map((provider) =>
-				provider.id === "radius" || provider.id === "pioneer"
-					? provider
-					: withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt),
-			);
+		const pioneerOnly = options.pioneerOnly ?? IS_PIONEER_DISTRIBUTION;
+		const pioneer = pioneerProvider(
+			{
+				name: "Pioneer browser sign-in",
+				login: loginPioneerInBrowser,
+				refresh: async () => {
+					throw new Error("Pioneer API key expired. Run /login to sign in again.");
+				},
+				toAuth: async (credential) => ({ apiKey: credential.access }),
+			},
+			loginPioneerWithApiKey,
+		);
+		const providers = pioneerOnly
+			? [pioneer]
+			: builtinProviderCatalog.builtinProviders().map((provider) => {
+					if (provider.id === "pioneer") return pioneer;
+					if (provider.id === "radius") return provider;
+					return withRemoteCatalog(
+						provider,
+						options.catalogBaseUrl,
+						builtinProviderCatalog.getBuiltinModelDataGeneratedAt(),
+					);
+				});
 		const runtime = new ModelRuntime(
 			credentials,
 			config,
@@ -252,6 +260,7 @@ export class ModelRuntime implements Models {
 			modelsStore,
 			providers,
 			process.env.PI_OFFLINE === undefined,
+			pioneerOnly,
 		);
 		runtime.configureRadiusProviders();
 		runtime.rebuildProviders();
@@ -277,6 +286,7 @@ export class ModelRuntime implements Models {
 	private configureRadiusProviders(): void {
 		this.builtins.clear();
 		for (const [providerId, provider] of this.defaultBuiltins) this.builtins.set(providerId, provider);
+		if (this.pioneerOnly) return;
 		for (const providerId of this.config.getProviderIds()) {
 			const config = this.config.getProvider(providerId);
 			if (config?.oauth !== "radius" || !config.baseUrl) continue;
@@ -313,6 +323,7 @@ export class ModelRuntime implements Models {
 
 	/** The provider without virtual models, or undefined when nothing defines it. */
 	private composeProvider(providerId: string): Provider | undefined {
+		if (this.pioneerOnly && providerId !== "pioneer") return undefined;
 		const base = this.nativeExtensionProviders.get(providerId) ?? this.builtins.get(providerId);
 		const extension = this.extensionProviders.get(providerId);
 		if (!this.config.getProvider(providerId) && !extension) {
@@ -646,8 +657,9 @@ export class ModelRuntime implements Models {
 		});
 	}
 
-	listCredentials(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
-		return this.credentials.list(options);
+	async listCredentials(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+		const credentials = await this.credentials.list(options);
+		return this.pioneerOnly ? credentials.filter(({ providerId }) => providerId === "pioneer") : credentials;
 	}
 
 	getProviderAuthStatus(providerId: string): AuthStatus {
@@ -896,6 +908,7 @@ export class ModelRuntime implements Models {
 	}
 
 	registerNativeProvider(provider: Provider): void {
+		if (this.pioneerOnly && provider.id !== "pioneer") return;
 		if (!provider.id.trim()) throw new Error("Provider id must not be empty.");
 		this.extensionProviders.delete(provider.id);
 		this.nativeExtensionProviders.set(provider.id, provider);
@@ -933,6 +946,7 @@ export class ModelRuntime implements Models {
 	}
 
 	registerProvider(providerId: string, config: ProviderConfigInput): void {
+		if (this.pioneerOnly && providerId !== "pioneer") return;
 		// Validate the incoming registration on its own, like the legacy registry:
 		// a broken re-registration must throw without touching the stored config.
 		validateExtensionProvider(providerId, this.builtins.get(providerId), this.config.getProvider(providerId), config);
@@ -970,6 +984,7 @@ export class ModelRuntime implements Models {
 	 */
 	registerVirtualModel(definition: VirtualModelDefinition): void {
 		const { provider: providerId, id } = definition;
+		if (this.pioneerOnly && providerId !== "pioneer") return;
 		if (!providerId.trim() || !id.trim()) throw new Error("Virtual model provider and id must not be empty.");
 		const existing = this.models.getModel(providerId, id);
 		if (existing && !isVirtualModel(existing)) {

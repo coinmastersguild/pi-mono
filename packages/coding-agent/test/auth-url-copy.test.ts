@@ -48,6 +48,19 @@ describe("sign-in URL copy key", () => {
 		expect(copyToClipboard).not.toHaveBeenCalled();
 	});
 
+	test("masks pasted secrets during editing and after submission", async () => {
+		const dialog = new LoginDialogComponent(tui, "pioneer", () => {});
+		const secret = `sk-pioneer-${"a".repeat(64)}`;
+		const result = dialog.showPrompt("Paste your Pioneer API key", undefined, { secret: true });
+
+		dialog.handleInput(`\x1b[200~${secret}\x1b[201~`);
+		expect(rendered(dialog)).toContain("********");
+		expect(rendered(dialog)).not.toContain(secret);
+		dialog.handleInput("\r");
+		await expect(result).resolves.toBe(secret);
+		expect(rendered(dialog)).not.toContain(secret);
+	});
+
 	test("MCP sign-in screen copies the authorization URL", async () => {
 		const view = new McpManagerView(tui, theme, new KeybindingsManager());
 		void view.redirectUrl("Sign in to issues", URL, new AbortController().signal);

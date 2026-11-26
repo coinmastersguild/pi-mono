@@ -1,3 +1,4 @@
+import { IS_PIONEER_DISTRIBUTION } from "../config.ts";
 import type { InlineExtension } from "../core/extensions/types.ts";
 import { createPioneerAnalyticExtension } from "../core/pioneer-analytic/index.ts";
 import codemodeExtension from "./codemode/index.ts";
@@ -17,7 +18,7 @@ export const builtInExtensions: InlineExtension[] = [
 	{ name: "pioneer-intro", factory: pioneerIntroExtension, builtin: true },
 	{ name: "pioneer-office", factory: pioneerOfficeExtension, builtin: true },
 	{ name: "pioneer-analytic", factory: createPioneerAnalyticExtension, builtin: true },
-	{ name: "llama.cpp", factory: llamaExtension, builtin: true },
+	...(IS_PIONEER_DISTRIBUTION ? [] : [{ name: "llama.cpp", factory: llamaExtension, builtin: true }]),
 	// Replaceable: an extension that registers `codemode`, `tool_search`, or `/mcp` (such as a third-party
 	// MCP extension) takes over instead of running alongside the built-in one.
 	{ name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true },

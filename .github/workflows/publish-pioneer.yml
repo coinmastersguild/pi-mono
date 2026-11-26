@@ -54,7 +54,7 @@ jobs:
         working-directory: packages/coding-agent
         run: >-
           node ../../node_modules/vitest/dist/cli.js --run
-          test/pioneer-login.test.ts test/pioneer-core.test.ts
+          test/pioneer-login.test.ts test/auth-url-copy.test.ts test/pioneer-core.test.ts
           test/pioneer-analytic.test.ts test/pioneer-office.test.ts
           test/pioneer-projects.test.ts test/privacy.test.ts
           test/privacy-onboarding.test.ts test/workspace-monitor.test.ts

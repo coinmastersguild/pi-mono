@@ -1,9 +1,13 @@
 import { join } from "node:path";
-import { getDocsPath } from "../config.ts";
+import { PIONEER_KEYS_URL } from "@earendil-works/pi-ai/providers/pioneer";
+import { APP_NAME, getDocsPath, IS_PIONEER_DISTRIBUTION } from "../config.ts";
 
 const UNKNOWN_PROVIDER = "unknown";
 
 export function getProviderLoginHelp(): string {
+	if (IS_PIONEER_DISTRIBUTION) {
+		return `Get a Pioneer API key at ${PIONEER_KEYS_URL}, then use /login in ${APP_NAME} or set PIONEER_API_KEY.`;
+	}
 	return [
 		"Use /login to log into a provider via OAuth or API key. See:",
 		`  ${join(getDocsPath(), "providers.md")}`,

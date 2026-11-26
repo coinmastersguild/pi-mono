@@ -1,6 +1,6 @@
 import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
 import { envApiKeyAuth } from "../auth/helpers.ts";
-import type { OAuthAuth } from "../auth/types.ts";
+import type { ApiKeyAuth, OAuthAuth } from "../auth/types.ts";
 import { createProvider, type Provider } from "../models.ts";
 import type { Model } from "../types.ts";
 
@@ -27,7 +27,8 @@ export const PIONEER_MODEL: Model<"openai-completions"> = {
 };
 
 /** The CLI supplies browser login; browser/SDK callers can still enter a key. */
-export function pioneerProvider(oauth?: OAuthAuth): Provider<"openai-completions"> {
+export function pioneerProvider(oauth?: OAuthAuth, apiKeyLogin?: ApiKeyAuth["login"]): Provider<"openai-completions"> {
+	const apiKey = envApiKeyAuth("Pioneer API key", ["PIONEER_API_KEY"]);
 	return createProvider({
 		id: "pioneer",
 		name: "Pioneer",
@@ -75,7 +76,7 @@ export function pioneerProvider(oauth?: OAuthAuth): Provider<"openai-completions
 		},
 		api: openAICompletionsApi(),
 		auth: {
-			apiKey: envApiKeyAuth("Pioneer API key", ["PIONEER_API_KEY"]),
+			apiKey: apiKeyLogin ? { ...apiKey, login: apiKeyLogin } : apiKey,
 			oauth: oauth ?? {
 				name: "Pioneer browser sign-in",
 				login: async (interaction) => {

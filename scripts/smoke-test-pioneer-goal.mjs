@@ -64,10 +64,10 @@ try {
 	await new Promise((accept, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", accept); });
 	const address = server.address();
 	assert.ok(address && typeof address !== "string");
-	await writeFile(join(directory, "models.json"), JSON.stringify({ providers: { "goal-smoke": { api: "openai-completions", apiKey: "offline-fixture", baseUrl: `http://127.0.0.1:${address.port}/v1`, models: [{ id: "goal-smoke" }] } } }));
-	child = spawn(process.execPath, [resolve(process.argv[2]), "--mode", "rpc", "--provider", "goal-smoke", "--model", "goal-smoke", "--tools", "read,write,goal_update", "--offline", "--no-mcp", "--no-intro", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-session"], {
+	await writeFile(join(directory, "models.json"), JSON.stringify({ providers: { pioneer: { api: "openai-completions", apiKey: "offline-fixture", baseUrl: `http://127.0.0.1:${address.port}/v1`, models: [{ id: "goal-smoke" }] } } }));
+	child = spawn(process.execPath, [resolve(process.argv[2]), "--mode", "rpc", "--provider", "pioneer", "--model", "goal-smoke", "--tools", "read,write,goal_update", "--offline", "--no-mcp", "--no-intro", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-session"], {
 		cwd: directory,
-		env: { ...process.env, PI_OFFLINE: "1", PIONEER_ANALYTIC_ENABLED: "0", PI_CODING_AGENT_DIR: directory, PIONEER_CODING_AGENT_DIR: directory },
+		env: { ...process.env, PI_OFFLINE: "1", PIONEER_API_KEY: "", PIONEER_ANALYTIC_ENABLED: "0", PI_CODING_AGENT_DIR: directory, PIONEER_CODING_AGENT_DIR: directory },
 		stdio: ["pipe", "pipe", "pipe"],
 	});
 	let stdout = "", stderr = "";

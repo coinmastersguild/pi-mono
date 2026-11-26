@@ -1,28 +1,46 @@
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import type { AuthInteraction, OAuthCredential } from "@earendil-works/pi-ai";
+import type { ApiKeyAuth, AuthInteraction, OAuthCredential } from "@earendil-works/pi-ai";
 import { PIONEER_KEYS_URL } from "@earendil-works/pi-ai/providers/pioneer";
 
 const PIONEER_ORIGIN = new URL(PIONEER_KEYS_URL).origin;
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const KEY_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 
-async function validateCredential(key: string, expires: number, signal: AbortSignal): Promise<OAuthCredential> {
+async function validateApiKey(key: string, signal: AbortSignal): Promise<void> {
 	if (!/^sk-pioneer-[a-f0-9]{64}$/.test(key)) {
 		throw new Error("Invalid Pioneer API key.");
 	}
+	let response: Response;
+	try {
+		response = await fetch(`${PIONEER_ORIGIN}/api/v1/account`, {
+			headers: { Authorization: `Bearer ${key}` },
+			signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
+			redirect: "error",
+		});
+	} catch {
+		if (signal.aborted) throw new Error("Login cancelled");
+		throw new Error("Could not verify the API key with Pioneer. Run /login to try again.");
+	}
+	await response.body?.cancel();
+	if (!response.ok) {
+		throw new Error(`Pioneer rejected the API key (HTTP ${response.status}). Run /login to try again.`);
+	}
+}
+
+export const loginPioneerWithApiKey: NonNullable<ApiKeyAuth["login"]> = async (interaction) => {
+	interaction.signal.throwIfAborted();
+	interaction.notify({ type: "info", message: "Get a Pioneer API key at", links: [{ url: PIONEER_KEYS_URL }] });
+	const key = (await interaction.prompt({ type: "secret", message: "Paste your Pioneer API key" })).trim();
+	await validateApiKey(key, interaction.signal);
+	return { type: "api_key", key };
+};
+
+async function validateCredential(key: string, expires: number, signal: AbortSignal): Promise<OAuthCredential> {
 	if (!Number.isFinite(expires) || expires <= Date.now() || expires > Date.now() + KEY_LIFETIME_MS) {
 		throw new Error("Invalid or expired Pioneer credential. Start sign-in again.");
 	}
-	const response = await fetch(`${PIONEER_ORIGIN}/api/v1/account`, {
-		headers: { Authorization: `Bearer ${key}` },
-		signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-		redirect: "error",
-	});
-	await response.body?.cancel();
-	if (!response.ok) {
-		throw new Error(`Pioneer rejected the credential (HTTP ${response.status}). Start sign-in again.`);
-	}
+	await validateApiKey(key, signal);
 	return { type: "oauth", access: key, refresh: "", expires };
 }
 

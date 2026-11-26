@@ -1,4 +1,4 @@
-import { APP_NAME } from "../config.ts";
+import { APP_NAME, IS_PIONEER_DISTRIBUTION } from "../config.ts";
 import type { SourceInfo } from "./source-info.ts";
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";
@@ -49,8 +49,13 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "fork", description: "Create a new fork from a previous user message" },
 	{ name: "clone", description: "Duplicate the current session at the current position" },
 	{ name: "trust", description: "Save project trust decision for future sessions" },
-	{ name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
-	{ name: "logout", description: "Remove provider authentication" },
+	IS_PIONEER_DISTRIBUTION
+		? { name: "login", description: "Paste a Pioneer API key" }
+		: { name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
+	{
+		name: "logout",
+		description: IS_PIONEER_DISTRIBUTION ? "Remove the saved Pioneer key" : "Remove provider authentication",
+	},
 	{ name: "new", description: "Start a new session" },
 	{ name: "compact", description: "Manually compact the session context" },
 	{ name: "resume", description: "Resume a different session" },
